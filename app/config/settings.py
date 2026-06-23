@@ -31,6 +31,7 @@ class Settings:
     max_image_bytes: int = 5 * 1024 * 1024
     allowed_image_mime_types: tuple[str, ...] = DEFAULT_ALLOWED_IMAGE_MIME_TYPES
     recognition_provider: str = "stub"
+    database_path: str = "data/garagemind.db"
     log_level: str = "INFO"
 
     @classmethod
@@ -49,5 +50,6 @@ class Settings:
             max_image_bytes=_read_int("MAX_IMAGE_BYTES", 5 * 1024 * 1024),
             allowed_image_mime_types=mime_types or DEFAULT_ALLOWED_IMAGE_MIME_TYPES,
             recognition_provider=os.getenv("PART_RECOGNITION_PROVIDER", "stub").strip().lower() or "stub",
+            database_path=os.getenv("DATABASE_PATH", "data/garagemind.db").strip() or "data/garagemind.db",
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",
         )

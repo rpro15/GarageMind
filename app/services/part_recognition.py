@@ -9,6 +9,7 @@ from app.adapters.stub_part_recognition import StubPartRecognitionProvider
 from app.api.errors import ApiError
 from app.config.settings import Settings
 from app.domain.models import ImagePayload, RecognitionResult
+from app.ports.part_catalog import PartCatalogRepository
 from app.ports.part_recognition import PartRecognitionProvider
 
 
@@ -169,15 +170,17 @@ class PartRecognitionService:
         )
 
 
-def build_part_recognition_service(settings: Settings, logger: logging.Logger) -> PartRecognitionService:
+def build_part_recognition_service(
+    settings: Settings, logger: logging.Logger, catalog_repository: PartCatalogRepository
+) -> PartRecognitionService:
     provider: PartRecognitionProvider
     if settings.recognition_provider == "stub":
-        provider = StubPartRecognitionProvider()
+        provider = StubPartRecognitionProvider(catalog_repository)
     else:
         logger.warning(
             "Unsupported part recognition provider '%s'; falling back to stub provider.",
             settings.recognition_provider,
         )
-        provider = StubPartRecognitionProvider()
+        provider = StubPartRecognitionProvider(catalog_repository)
 
     return PartRecognitionService(provider=provider, settings=settings, logger=logger)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import tempfile
 import unittest
 
 from app.config.settings import Settings
@@ -15,16 +16,21 @@ SAMPLE_PNG = base64.b64decode(
 
 class ApiTestCase(unittest.TestCase):
     def setUp(self) -> None:
+        self._tmp_dir = tempfile.TemporaryDirectory()
         app = create_app(
             Settings(
                 max_image_bytes=1024 * 1024,
                 allowed_image_mime_types=("image/png", "image/jpeg", "image/webp"),
                 recognition_provider="stub",
+                database_path=f"{self._tmp_dir.name}/catalog.db",
                 log_level="DEBUG",
             )
         )
         app.testing = True
         self.client = app.test_client()
+
+    def tearDown(self) -> None:
+        self._tmp_dir.cleanup()
 
     def test_recognize_part_accepts_multipart_upload(self) -> None:
         response = self.client.post(
