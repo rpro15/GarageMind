@@ -146,14 +146,14 @@ def calculate_check_digit(vin: str) -> str:
     return "X" if remainder == 10 else str(remainder)
 
 
-def decode_model_year(code: str) -> int | None:
+def decode_model_year(code: str, *, current_year: int | None = None) -> int | None:
     if code not in MODEL_YEAR_BASE:
         return None
 
-    current_year = datetime.now(timezone.utc).year
+    resolved_current_year = current_year or datetime.now(timezone.utc).year
     base_year = MODEL_YEAR_BASE[code]
-    candidate_years = list(range(base_year, current_year + 31, 30))
-    valid_years = [year for year in candidate_years if year <= current_year + 1]
+    candidate_years = list(range(base_year, resolved_current_year + 31, 30))
+    valid_years = [year for year in candidate_years if year <= resolved_current_year + 1]
     if valid_years:
         return max(valid_years)
     return min(candidate_years)

@@ -37,7 +37,7 @@ class VinDecoderServiceTestCase(unittest.TestCase):
         self.assertEqual(calculate_check_digit("1M8GDM9AXKP042788"), "X")
 
     def test_model_year_uses_latest_plausible_cycle(self) -> None:
-        self.assertEqual(decode_model_year("S"), 2025)
+        self.assertEqual(decode_model_year("S", current_year=2026), 2025)
 
 
 if __name__ == "__main__":
