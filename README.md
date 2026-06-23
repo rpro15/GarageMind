@@ -1,11 +1,32 @@
 # GarageMind
 
-GarageMind now exposes a production-oriented HTTP API for two first-iteration capabilities:
+GarageMind is a partner-aware tire and wheel recommendation engine with a Flask HTTP API.  The primary flow lets a user request ranked product recommendations **without a VIN**.  Affiliate links are embedded in every recommendation so partner-driven revenue can be tracked from the first click.
 
-- photo-based part recognition with a deterministic local stub provider;
-- VIN validation and decoding with proper check-digit verification.
+VIN decoding and photo-based part recognition remain available as secondary, opt-in capabilities for users who want richer context.
 
-The current iteration is intentionally stateless: there is **no database yet**. The architecture keeps provider and service boundaries explicit so a real catalog, model provider, and persistence layer can be added later without rewriting the HTTP contract.
+## Product flow
+
+```
+User → GET /api/recommend?category=tire
+     ← ranked product cards with affiliate URLs
+
+User clicks a card → POST /api/track-click
+                   ← click event recorded for attribution
+```
+
+## Referral monetization
+
+Partners in the registry are assigned an `affiliate_weight` (0–1).  Partners who have a signed affiliate agreement receive a higher weight, which lifts their products in the ranking formula:
+
+```
+score = match_score   × 0.40
+      + price_score   × 0.20
+      + delivery_score× 0.10
+      + rating_score  × 0.10
+      + affiliate_weight × 0.20
+```
+
+Each recommendation card includes an `affiliate_url` built from the partner's URL template.  Click events are recorded via `/api/track-click` and carry a `session_id` for attribution.
 
 ## Stack
 
@@ -54,165 +75,124 @@ app/
   config/
     settings.py
   domain/
+    catalog.py          ← Partner, Product, Recommendation, ClickEvent models
     models.py
   ports/
     part_recognition.py
   services/
+    affiliate.py        ← AffiliateLinkBuilder, ClickTrackingService
     part_recognition.py
+    recommendation.py   ← PartnerRegistry, ProductCatalog, RecommendationRanker
     vin_decoder.py
   main.py
 tests/
   test_api.py
+  test_recommendations.py
   test_vin_decoder.py
 ```
 
 ## API
 
-### `POST /api/recognize-part`
+### `GET /api/recommend` ← primary flow
+
+Returns ranked tire or wheel recommendations without requiring a VIN.
+
+#### Parameters
+
+| Name | Required | Description |
+| --- | --- | --- |
+| `category` | yes | `tire` or `wheel` |
+| `n` | no | Max results to return (1–10, default 4) |
+
+#### Example
+
+```bash
+curl "http://127.0.0.1:8000/api/recommend?category=tire&n=3"
+```
+
+#### Success response
+
+```json
+{
+  "category": "tire",
+  "count": 3,
+  "recommendations": [
+    {
+      "product_id": "tire-001",
+      "name": "Michelin Pilot Sport 4 205/55 R16",
+      "category": "tire",
+      "price": 6500.0,
+      "rating": 4.8,
+      "delivery_days": 3,
+      "image_url": null,
+      "description": "High-performance summer tyre",
+      "partner": "Ozon",
+      "partner_id": "ozon",
+      "score": 0.7988,
+      "affiliate_url": "https://ozon.ru/product/tire-001?ref=garagemind",
+      "reason": "affiliate partner, highly rated"
+    }
+  ]
+}
+```
+
+### `POST /api/track-click`
+
+Records a click event for affiliate attribution.
+
+#### Request body
+
+```json
+{
+  "product_id": "tire-001",
+  "partner_id": "ozon",
+  "session_id": "optional-session-token"
+}
+```
+
+#### Success response
+
+```json
+{
+  "status": "recorded",
+  "event": {
+    "product_id": "tire-001",
+    "partner_id": "ozon",
+    "timestamp": "2026-06-23T11:00:00+00:00",
+    "session_id": "optional-session-token"
+  }
+}
+```
+
+### `POST /api/recognize-part` ← secondary / optional
 
 Accepts either `multipart/form-data` with an `image` file field or JSON with a base64 payload.
-
-#### Multipart example
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/recognize-part \
   -F "image=@/absolute/path/to/brake-pad.png"
 ```
 
-#### JSON base64 example
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/recognize-part \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5+G94AAAAASUVORK5CYII=",
-    "content_type": "image/png",
-    "filename": "part.png"
-  }'
-```
-
-#### Success response
-
-```json
-{
-  "part_name": "Brake Pad Set",
-  "category": "braking",
-  "confidence": 0.74,
-  "possible_matches": [
-    {
-      "part_name": "Brake Pad Set",
-      "category": "braking",
-      "confidence": 0.74
-    },
-    {
-      "part_name": "Oil Filter",
-      "category": "engine",
-      "confidence": 0.44
-    },
-    {
-      "part_name": "Shock Absorber",
-      "category": "suspension",
-      "confidence": 0.31
-    }
-  ],
-  "source": "stub"
-}
-```
-
-#### Error examples
-
-Unsupported media type:
-
-```json
-{
-  "error": {
-    "code": "unsupported_media_type",
-    "message": "Use multipart/form-data or application/json for this endpoint.",
-    "request_id": "8a9f..."
-  }
-}
-```
-
-Malformed base64:
-
-```json
-{
-  "error": {
-    "code": "invalid_base64_image",
-    "message": "image_base64 must be a valid base64-encoded string.",
-    "request_id": "8a9f..."
-  }
-}
-```
-
-### `GET|POST /api/decode-vin`
+### `GET|POST /api/decode-vin` ← secondary / optional
 
 Accepts a VIN either as a `vin` query parameter or in a JSON body.
-
-#### Request examples
 
 ```bash
 curl "http://127.0.0.1:8000/api/decode-vin?vin=1HGCM82633A004352"
 ```
 
-```bash
-curl -X POST http://127.0.0.1:8000/api/decode-vin \
-  -H "Content-Type: application/json" \
-  -d '{"vin":"1HGCM82633A004352"}'
-```
-
-#### Success response
-
-```json
-{
-  "vin": "1HGCM82633A004352",
-  "is_valid": true,
-  "validation_errors": [],
-  "decoded": {
-    "wmi": "1HG",
-    "region": "United States",
-    "manufacturer": "Honda",
-    "model_year": 2003,
-    "plant_code": "A",
-    "serial": "004352"
-  }
-}
-```
-
-#### Invalid VIN response
-
-Status: `422 Unprocessable Entity`
-
-```json
-{
-  "vin": "1HGCM82633A004353",
-  "is_valid": false,
-  "validation_errors": [
-    "VIN check digit mismatch: expected 5, got 3."
-  ],
-  "decoded": {
-    "wmi": "1HG",
-    "region": "United States",
-    "manufacturer": "Honda",
-    "model_year": 2003,
-    "plant_code": "A",
-    "serial": "004353"
-  }
-}
-```
-
 ## Engineering notes
 
 - Handlers stay thin; validation and business logic live in services.
-- Part recognition is implemented behind a provider port so a real model adapter can replace the stub later.
-- VIN decoding is deterministic and fully test-covered for checksum and edge cases.
+- `RecommendationRanker` is deterministic and easy to unit-test.
+- Partners and products are currently stub in-memory data; swap in a real registry/catalog without touching route handlers.
+- `ClickTrackingService` uses an in-memory list; replace with a persistent adapter when needed.
+- Part recognition uses a provider port so a real model adapter can replace the stub later.
 - Responses include `X-Request-Id` headers for request tracing.
 
-## Current limitation and roadmap
+## Roadmap
 
-This PR does **not** add a database or paid external APIs. Suggested follow-up path:
-
-1. add a catalog-backed part entity model and persistence layer;
-2. plug a real vision provider into the part recognition port;
-3. enrich VIN decoding with a larger WMI/manufacturer dataset;
-4. add inventory/catalog joins once the DB layer exists.
+1. Persist partners, products and click events (SQLite / PostgreSQL).
+2. Add real partner API adapters for Ozon, Wildberries, etc.
+3. Enrich recommendations with VIN-derived fitment data as an optional step.
+4. Plug a real vision provider into the part recognition port.
