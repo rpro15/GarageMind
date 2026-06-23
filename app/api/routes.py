@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, current_app, jsonify, request
 
 from app.api.errors import ApiError
+from app.ports.catalog_repository import CatalogRepository
 from app.services.part_recognition import PartRecognitionService
 from app.services.vin_decoder import VinDecoderService
 
@@ -16,6 +17,10 @@ def _part_service() -> PartRecognitionService:
 
 def _vin_service() -> VinDecoderService:
     return current_app.extensions["services"]["vin_decoder"]
+
+
+def _catalog_repo() -> CatalogRepository:
+    return current_app.extensions["catalog_repo"]
 
 
 @api_blueprint.post("/recognize-part")
@@ -82,3 +87,21 @@ def decode_vin():
 
     result = _vin_service().decode(vin_value)
     return jsonify(result.to_dict()), 200 if result.is_valid else 422
+
+
+@api_blueprint.get("/catalog")
+def list_catalog():
+    parts = _catalog_repo().list_parts()
+    return jsonify({"parts": [p.to_dict() for p in parts], "total": len(parts)}), 200
+
+
+@api_blueprint.get("/catalog/<int:part_id>")
+def get_catalog_part(part_id: int):
+    part = _catalog_repo().get_part(part_id)
+    if part is None:
+        raise ApiError(
+            code="part_not_found",
+            message=f"No catalog part with id {part_id}.",
+            status_code=404,
+        )
+    return jsonify(part.to_dict()), 200
