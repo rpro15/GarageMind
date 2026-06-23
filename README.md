@@ -40,6 +40,8 @@ Environment variables are loaded directly from the process environment.
 | `MAX_IMAGE_BYTES` | `5242880` | Maximum accepted image payload size |
 | `ALLOWED_IMAGE_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif,image/bmp` | Allowed upload types |
 | `PART_RECOGNITION_PROVIDER` | `stub` | Provider toggle; unknown values fall back to stub |
+| `PRODUCT_SEARCH_PROVIDER` | `stub` | Product search provider (`stub`; future: `ozon_api`, `wb_api`) |
+| `PARTNER_MARKETPLACES` | `ozon,wildberries,admitad,yandex_market` | Comma-separated list of affiliate partner marketplaces shown with higher priority |
 | `LOG_LEVEL` | `INFO` | Application log level |
 
 ## Project structure

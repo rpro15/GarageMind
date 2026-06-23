@@ -20,6 +20,8 @@ class ApiTestCase(unittest.TestCase):
                 max_image_bytes=1024 * 1024,
                 allowed_image_mime_types=("image/png", "image/jpeg", "image/webp"),
                 recognition_provider="stub",
+                product_search_provider="stub",
+                partner_marketplaces=("ozon", "wildberries"),
                 log_level="DEBUG",
             )
         )
@@ -100,6 +102,159 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.get_json()
         self.assertEqual(payload["error"]["code"], "missing_vin")
+
+    # ------------------------------------------------------------------
+    # POST /api/recommend
+    # ------------------------------------------------------------------
+
+    def test_recommend_returns_results_for_valid_request(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Toyota",
+                "car_model": "Camry",
+                "car_year": 2020,
+                "category": "tires",
+                "season": "winter",
+                "driving_style": "comfort",
+                "budget_rub": 30000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertIn("recommendations", payload)
+        self.assertIn("car", payload)
+        self.assertIn("partner_priority", payload)
+        self.assertGreater(len(payload["recommendations"]), 0)
+        self.assertLessEqual(len(payload["recommendations"]), 4)
+        self.assertEqual(payload["car"]["make"], "Toyota")
+
+    def test_recommend_first_result_has_required_fields(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Honda",
+                "car_model": "Civic",
+                "car_year": 2019,
+                "category": "tires",
+                "season": "summer",
+                "driving_style": "sport",
+                "budget_rub": 50000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        rec = payload["recommendations"][0]
+        for key in ("rank", "product_name", "category", "season", "price_rub",
+                    "marketplace", "affiliate_url", "image_url", "is_partner", "source"):
+            self.assertIn(key, rec)
+
+    def test_recommend_partner_marketplaces_respected(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "BMW",
+                "car_model": "X5",
+                "car_year": 2021,
+                "category": "tires",
+                "season": "winter",
+                "driving_style": "comfort",
+                "budget_rub": 50000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["partner_priority"], ["ozon", "wildberries"])
+        for rec in payload["recommendations"]:
+            if rec["marketplace"] in ("ozon", "wildberries"):
+                self.assertTrue(rec["is_partner"])
+            else:
+                self.assertFalse(rec["is_partner"])
+
+    def test_recommend_returns_400_for_invalid_category(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Toyota",
+                "car_model": "Camry",
+                "car_year": 2020,
+                "category": "oil",
+                "season": "winter",
+                "driving_style": "comfort",
+                "budget_rub": 30000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"]["code"], "invalid_recommend_request")
+
+    def test_recommend_returns_400_for_invalid_season(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Toyota",
+                "car_model": "Camry",
+                "car_year": 2020,
+                "category": "tires",
+                "season": "monsoon",
+                "driving_style": "comfort",
+                "budget_rub": 30000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"]["code"], "invalid_recommend_request")
+
+    def test_recommend_returns_415_for_non_json(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            data="car_make=Toyota",
+            content_type="application/x-www-form-urlencoded",
+        )
+
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.get_json()["error"]["code"], "unsupported_media_type")
+
+    def test_recommend_returns_empty_list_when_budget_too_low(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Toyota",
+                "car_model": "Camry",
+                "car_year": 2020,
+                "category": "tires",
+                "season": "winter",
+                "driving_style": "comfort",
+                "budget_rub": 100,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["recommendations"], [])
+
+    def test_recommend_wheels_category(self) -> None:
+        response = self.client.post(
+            "/api/recommend",
+            json={
+                "car_make": "Lada",
+                "car_model": "Vesta",
+                "car_year": 2022,
+                "category": "wheels",
+                "season": "summer",
+                "driving_style": "comfort",
+                "budget_rub": 10000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        for rec in payload["recommendations"]:
+            self.assertEqual(rec["category"], "wheels")
 
 
 if __name__ == "__main__":

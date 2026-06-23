@@ -9,6 +9,7 @@ from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
 from app.config.settings import Settings
 from app.services.part_recognition import build_part_recognition_service
+from app.services.recommendation import build_recommendation_service
 from app.services.vin_decoder import VinDecoderService
 
 
@@ -29,6 +30,11 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.extensions["services"] = {
         "part_recognition": build_part_recognition_service(active_settings, app.logger),
         "vin_decoder": VinDecoderService(app.logger),
+        "recommendation": build_recommendation_service(
+            provider_name=active_settings.product_search_provider,
+            partner_marketplaces=list(active_settings.partner_marketplaces),
+            logger=app.logger,
+        ),
     }
 
     @app.before_request
