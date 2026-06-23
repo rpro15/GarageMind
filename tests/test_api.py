@@ -5,7 +5,7 @@ import io
 import unittest
 
 from app.config.settings import Settings
-from app.main import create_app
+from app.old_main import create_app
 
 
 SAMPLE_PNG = base64.b64decode(

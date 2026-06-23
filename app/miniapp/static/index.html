@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GarageMind — подбор шин</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1><i class="fas fa-car"></i> GarageMind</h1>
+            <p>Подбор шин и дисков</p>
+        </header>
+        <main>
+            <form id="tireForm">
+                <div class="form-group">
+                    <label for="brand">Марка</label>
+                    <select id="brand" required>
+                        <option value="">Выберите марку</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="model">Модель</label>
+                    <select id="model" required disabled>
+                        <option value="">Сначала выберите марку</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="year">Год выпуска</label>
+                    <input type="number" id="year" placeholder="например, 2020" min="1980" max="2026" required>
+                </div>
+                <div class="form-group">
+                    <label>Стиль вождения</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="driving_style" value="comfort" checked> Комфорт</label>
+                        <label><input type="radio" name="driving_style" value="sport"> Спорт</label>
+                        <label><input type="radio" name="driving_style" value="economy"> Экономия</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="budget">Бюджет (₽ за комплект)</label>
+                    <input type="number" id="budget" placeholder="Необязательно">
+                </div>
+                <div class="form-group">
+                    <label>Сезон</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="season" value="summer" checked> Лето</label>
+                        <label><input type="radio" name="season" value="winter"> Зима</label>
+                        <label><input type="radio" name="season" value="all_season"> Всесезон</label>
+                    </div>
+                </div>
+                <button type="submit" id="submitBtn">
+                    <i class="fas fa-search"></i> Подобрать шины
+                </button>
+            </form>
+            <div id="results" style="display: none;">
+                <h2>Рекомендации</h2>
+                <div id="advice" class="advice-box"></div>
+                <div id="product-list" class="product-list"></div>
+            </div>
+            <div id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Ищем лучшие шины...</p>
+            </div>
+        </main>
+        <footer>
+            <p>🔗 Мы получаем комиссию от партнёров</p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

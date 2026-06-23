@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing import List, Optional
+from enum import Enum
+
 
 @dataclass(frozen=True)
 class ImagePayload:
@@ -77,3 +80,38 @@ class VinDecodeResult:
             "validation_errors": self.validation_errors,
             "decoded": self.decoded.to_dict(),
         }
+
+class DrivingStyle(str, Enum):
+    COMFORT = "comfort"
+    SPORT = "sport"
+    ECONOMY = "economy"
+
+class Season(str, Enum):
+    SUMMER = "summer"
+    WINTER = "winter"
+    ALL_SEASON = "all_season"
+
+@dataclass
+class TireRequest:
+    brand: str
+    model: str
+    year: int
+    driving_style: DrivingStyle
+    budget: Optional[int] = None
+    season: Optional[Season] = None
+
+@dataclass
+class Product:
+    id: str
+    name: str
+    price: float
+    currency: str = "RUB"
+    image_url: Optional[str] = None
+    partner_link: Optional[str] = None
+    source: str  # 'ozon', 'wb', 'yandex', etc.
+
+@dataclass
+class RecommendationResult:
+    advice: str  # текст от DeepSeek
+    products: List[Product]
+    request: TireRequest

@@ -1,0 +1,249 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: #f4f6f8;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+}
+
+#app {
+    max-width: 480px;
+    width: 100%;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+    overflow: hidden;
+    padding: 24px 20px 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a2b3c;
+    letter-spacing: -0.5px;
+}
+
+header h1 i {
+    color: #2d7aff;
+    margin-right: 8px;
+}
+
+header p {
+    color: #6b7a8a;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+label {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    color: #2c3e50;
+    margin-bottom: 6px;
+}
+
+select, input[type="number"] {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #dce1e8;
+    border-radius: 12px;
+    font-size: 16px;
+    background: #fafbfc;
+    transition: 0.2s;
+    outline: none;
+}
+
+select:focus, input:focus {
+    border-color: #2d7aff;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(45, 122, 255, 0.15);
+}
+
+.radio-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.radio-group label {
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0f2f5;
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.radio-group label:has(input:checked) {
+    background: #2d7aff;
+    color: white;
+}
+
+.radio-group input[type="radio"] {
+    accent-color: #2d7aff;
+    width: 16px;
+    height: 16px;
+}
+
+button#submitBtn {
+    width: 100%;
+    padding: 16px;
+    background: #2d7aff;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+button#submitBtn:hover {
+    background: #1a5fcf;
+    transform: scale(1.01);
+}
+
+button#submitBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#results {
+    margin-top: 24px;
+}
+
+#results h2 {
+    font-size: 20px;
+    margin-bottom: 12px;
+    color: #1a2b3c;
+}
+
+.advice-box {
+    background: #f0f7ff;
+    padding: 16px;
+    border-radius: 14px;
+    border-left: 4px solid #2d7aff;
+    margin-bottom: 20px;
+    line-height: 1.6;
+    color: #1f2a36;
+}
+
+.product-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.product-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #fafbfc;
+    border-radius: 14px;
+    padding: 12px;
+    border: 1px solid #e9edf2;
+    transition: 0.2s;
+}
+
+.product-card:hover {
+    background: #f0f4f9;
+}
+
+.product-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    border-radius: 10px;
+    background: white;
+    padding: 4px;
+}
+
+.product-info {
+    flex: 1;
+}
+
+.product-info .name {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1a2b3c;
+}
+
+.product-info .price {
+    font-size: 16px;
+    font-weight: 700;
+    color: #2d7aff;
+}
+
+.product-info .source {
+    font-size: 12px;
+    color: #8899aa;
+}
+
+.product-link {
+    background: #2d7aff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.product-link:hover {
+    background: #1a5fcf;
+}
+
+#loading {
+    text-align: center;
+    padding: 30px 0;
+}
+
+.spinner {
+    border: 4px solid #e9edf2;
+    border-top: 4px solid #2d7aff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: #9aaebb;
+}
