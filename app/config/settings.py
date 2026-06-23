@@ -36,6 +36,10 @@ class Settings:
     product_search_provider: str = "stub"
     partner_marketplaces: tuple[str, ...] = DEFAULT_PARTNER_MARKETPLACES
     log_level: str = "INFO"
+    db_path: str = "garagemind.db"
+    redis_url: str | None = None
+    deepseek_api_key: str | None = None
+    deepseek_partner_id: str = "GARAGEMIND"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -66,4 +70,8 @@ class Settings:
             product_search_provider=os.getenv("PRODUCT_SEARCH_PROVIDER", "stub").strip().lower() or "stub",
             partner_marketplaces=partner_marketplaces or DEFAULT_PARTNER_MARKETPLACES,
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",
+            db_path=os.getenv("DB_PATH", "garagemind.db"),
+            redis_url=os.getenv("REDIS_URL") or None,
+            deepseek_api_key=os.getenv("DEEPSEEK_API_KEY") or None,
+            deepseek_partner_id=os.getenv("DEEPSEEK_PARTNER_ID", "GARAGEMIND"),
         )

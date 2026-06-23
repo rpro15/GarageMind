@@ -8,6 +8,8 @@ from flask import Flask, g, request
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
 from app.config.settings import Settings
+from app.data.car_tires_db import init_car_tires_db
+from app.db.database import Database
 from app.services.part_recognition import build_part_recognition_service
 from app.services.recommendation import build_recommendation_service
 from app.services.vin_decoder import VinDecoderService
@@ -34,8 +36,13 @@ def create_app(settings: Settings | None = None) -> Flask:
             provider_name=active_settings.product_search_provider,
             partner_marketplaces=list(active_settings.partner_marketplaces),
             logger=app.logger,
+            redis_url=active_settings.redis_url,
+            deepseek_api_key=active_settings.deepseek_api_key,
+            deepseek_partner_id=active_settings.deepseek_partner_id,
         ),
     }
+    app.extensions["db"] = Database(db_path=active_settings.db_path)
+    app.extensions["car_tires_db"] = init_car_tires_db(db_path=active_settings.db_path)
 
     @app.before_request
     def attach_request_id() -> None:
