@@ -5,7 +5,7 @@ GarageMind now exposes a production-oriented HTTP API for two first-iteration ca
 - photo-based part recognition with a deterministic local stub provider;
 - VIN validation and decoding with proper check-digit verification.
 
-The current iteration is intentionally stateless: there is **no database yet**. The architecture keeps provider and service boundaries explicit so a real catalog, model provider, and persistence layer can be added later without rewriting the HTTP contract.
+The application now includes a lightweight SQLite-backed part catalog persistence layer while keeping provider and service boundaries explicit so a real vision provider can be introduced without rewriting the HTTP contract.
 
 ## Stack
 
@@ -40,6 +40,7 @@ Environment variables are loaded directly from the process environment.
 | `MAX_IMAGE_BYTES` | `5242880` | Maximum accepted image payload size |
 | `ALLOWED_IMAGE_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif,image/bmp` | Allowed upload types |
 | `PART_RECOGNITION_PROVIDER` | `stub` | Provider toggle; unknown values fall back to stub |
+| `DATABASE_PATH` | `data/garagemind.db` | SQLite file used for the part catalog |
 | `LOG_LEVEL` | `INFO` | Application log level |
 
 ## Project structure
@@ -50,12 +51,14 @@ app/
     errors.py
     routes.py
   adapters/
+    sqlite_part_catalog.py
     stub_part_recognition.py
   config/
     settings.py
   domain/
     models.py
   ports/
+    part_catalog.py
     part_recognition.py
   services/
     part_recognition.py
@@ -204,15 +207,15 @@ Status: `422 Unprocessable Entity`
 ## Engineering notes
 
 - Handlers stay thin; validation and business logic live in services.
-- Part recognition is implemented behind a provider port so a real model adapter can replace the stub later.
+- Part recognition is implemented behind a provider port, and catalog data now comes from a SQLite-backed repository abstraction.
 - VIN decoding is deterministic and fully test-covered for checksum and edge cases.
 - Responses include `X-Request-Id` headers for request tracing.
 
 ## Current limitation and roadmap
 
-This PR does **not** add a database or paid external APIs. Suggested follow-up path:
+Current follow-up path:
 
-1. add a catalog-backed part entity model and persistence layer;
-2. plug a real vision provider into the part recognition port;
+1. plug a real vision provider into the part recognition port;
+2. persist recognition events/history on top of the same database layer;
 3. enrich VIN decoding with a larger WMI/manufacturer dataset;
 4. add inventory/catalog joins once the DB layer exists.

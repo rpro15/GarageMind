@@ -5,6 +5,8 @@ import uuid
 
 from flask import Flask, g, request
 
+from app.adapters.sqlite_part_catalog import SqlitePartCatalogRepository
+from app.adapters.stub_part_recognition import DEFAULT_PART_CATALOG
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
 from app.config.settings import Settings
@@ -26,8 +28,11 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = active_settings.max_image_bytes
+    catalog_repository = SqlitePartCatalogRepository(active_settings.database_path)
+    catalog_repository.ensure_schema()
+    catalog_repository.seed_if_empty(DEFAULT_PART_CATALOG)
     app.extensions["services"] = {
-        "part_recognition": build_part_recognition_service(active_settings, app.logger),
+        "part_recognition": build_part_recognition_service(active_settings, app.logger, catalog_repository),
         "vin_decoder": VinDecoderService(app.logger),
     }
 

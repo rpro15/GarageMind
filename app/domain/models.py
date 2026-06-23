@@ -26,6 +26,12 @@ class RecognitionMatch:
 
 
 @dataclass(frozen=True)
+class CatalogItem:
+    part_name: str
+    category: str
+
+
+@dataclass(frozen=True)
 class RecognitionResult:
     part_name: str
     category: str
