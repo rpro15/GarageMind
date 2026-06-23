@@ -8,7 +8,12 @@ from flask import Flask, g, request
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
 from app.config.settings import Settings
+from app.services.affiliate_link_builder import AffiliateLinkBuilder
+from app.services.click_tracker import ClickTrackingService
 from app.services.part_recognition import build_part_recognition_service
+from app.services.partner_registry import PartnerRegistry
+from app.services.recommendation import RecommendationService
+from app.services.recommendation_ranker import RecommendationRanker
 from app.services.vin_decoder import VinDecoderService
 
 
@@ -26,9 +31,16 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = active_settings.max_image_bytes
+
+    registry = PartnerRegistry()
+    link_builder = AffiliateLinkBuilder()
+    ranker = RecommendationRanker(link_builder=link_builder)
+
     app.extensions["services"] = {
         "part_recognition": build_part_recognition_service(active_settings, app.logger),
         "vin_decoder": VinDecoderService(app.logger),
+        "recommendation": RecommendationService(registry=registry, ranker=ranker),
+        "click_tracker": ClickTrackingService(logger=app.logger),
     }
 
     @app.before_request
