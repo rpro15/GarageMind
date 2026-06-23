@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GarageMind — Подбор шин и дисков</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #fff);
+      --text: var(--tg-theme-text-color, #111);
+      --hint: var(--tg-theme-hint-color, #999);
+      --btn-bg: var(--tg-theme-button-color, #2481cc);
+      --btn-text: var(--tg-theme-button-text-color, #fff);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f5);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      min-height: 100vh;
+    }
+    h1 { font-size: 1.2rem; margin-bottom: 4px; }
+    .subtitle { font-size: 0.85rem; color: var(--hint); margin-bottom: 20px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.8rem; color: var(--hint); margin-bottom: 4px; }
+    select, input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      background: var(--secondary-bg);
+      color: var(--text);
+      appearance: none;
+    }
+    .row { display: flex; gap: 10px; }
+    .row .form-group { flex: 1; }
+    button.primary {
+      width: 100%;
+      padding: 14px;
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button.primary:active { opacity: 0.85; }
+    #results { margin-top: 24px; }
+    .card {
+      background: var(--secondary-bg);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .card .rank { font-size: 0.75rem; color: var(--hint); margin-bottom: 2px; }
+    .card .name { font-weight: 600; font-size: 1rem; margin-bottom: 6px; }
+    .card .meta { font-size: 0.85rem; color: var(--hint); margin-bottom: 10px; }
+    .card .price { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }
+    .partner-badge {
+      display: inline-block;
+      background: #ffd700;
+      color: #333;
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 6px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .card a.buy-btn {
+      display: block;
+      text-align: center;
+      padding: 10px;
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      border-radius: var(--radius);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .spinner {
+      text-align: center;
+      padding: 24px;
+      color: var(--hint);
+    }
+    .error-msg {
+      color: #e53935;
+      background: #ffeaea;
+      padding: 12px;
+      border-radius: var(--radius);
+      margin-top: 12px;
+    }
+    .empty-msg {
+      text-align: center;
+      color: var(--hint);
+      padding: 24px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🚗 GarageMind</h1>
+<p class="subtitle">Не читай форумы — просто спроси</p>
+
+<form id="form">
+  <div class="row">
+    <div class="form-group">
+      <label for="make">Марка</label>
+      <select id="make" required>
+        <option value="">Загрузка…</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="model">Модель</label>
+      <select id="model" required>
+        <option value="">— выберите марку —</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="year">Год выпуска</label>
+    <input type="number" id="year" min="1990" max="2027" placeholder="2020" required />
+  </div>
+
+  <div class="row">
+    <div class="form-group">
+      <label for="category">Тип</label>
+      <select id="category" required>
+        <option value="tires">🔘 Шины</option>
+        <option value="wheels">💿 Диски</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="season">Сезон</label>
+      <select id="season" required>
+        <option value="winter">❄️ Зима</option>
+        <option value="summer">☀️ Лето</option>
+        <option value="all_season">🌤 Всесезон</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="style">Стиль вождения</label>
+    <select id="style" required>
+      <option value="comfort">😌 Комфорт</option>
+      <option value="sport">🏎 Спорт</option>
+      <option value="offroad">🚙 Бездорожье</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="budget">Бюджет (₽)</label>
+    <input type="number" id="budget" min="1000" step="1000" placeholder="30000" required />
+  </div>
+
+  <button type="submit" class="primary">🔍 Подобрать</button>
+</form>
+
+<div id="results"></div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) tg.ready();
+
+  // Replace with your actual API base URL (same domain or env-injected)
+  const API_BASE = window.GARAGEMIND_API_BASE || "";
+
+  const makeEl   = document.getElementById("make");
+  const modelEl  = document.getElementById("model");
+  const resultsEl = document.getElementById("results");
+
+  // --- Load makes ---
+  async function loadMakes() {
+    try {
+      const resp = await fetch(`${API_BASE}/api/cars`);
+      const data = await resp.json();
+      makeEl.innerHTML = '<option value="">— марка —</option>';
+      (data.makes || []).forEach(m => {
+        makeEl.appendChild(new Option(m, m));
+      });
+    } catch {
+      makeEl.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+  }
+
+  // --- Load models when make changes ---
+  makeEl.addEventListener("change", async () => {
+    const make = makeEl.value;
+    modelEl.innerHTML = '<option value="">Загрузка…</option>';
+    if (!make) { modelEl.innerHTML = '<option value="">— выберите марку —</option>'; return; }
+    try {
+      const resp = await fetch(`${API_BASE}/api/cars?make=${encodeURIComponent(make)}`);
+      const data = await resp.json();
+      modelEl.innerHTML = '<option value="">— модель —</option>';
+      (data.models || []).forEach(m => modelEl.appendChild(new Option(m, m)));
+    } catch {
+      modelEl.innerHTML = '<option value="">Ошибка</option>';
+    }
+  });
+
+  // --- Submit ---
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    resultsEl.innerHTML = '<div class="spinner">⏳ Подбираю варианты…</div>';
+
+    const payload = {
+      car_make:      makeEl.value,
+      car_model:     modelEl.value,
+      car_year:      parseInt(document.getElementById("year").value),
+      category:      document.getElementById("category").value,
+      season:        document.getElementById("season").value,
+      driving_style: document.getElementById("style").value,
+      budget_rub:    parseInt(document.getElementById("budget").value),
+    };
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/recommend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        resultsEl.innerHTML = `<div class="error-msg">❌ ${data?.error?.message || "Ошибка запроса"}</div>`;
+        return;
+      }
+
+      const recs = data.recommendations || [];
+      if (!recs.length) {
+        resultsEl.innerHTML = '<div class="empty-msg">😔 Ничего не найдено. Попробуйте увеличить бюджет.</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = recs.map(rec => `
+        <div class="card">
+          <div class="rank">#${rec.rank}</div>
+          <div class="name">
+            ${rec.product_name}
+            ${rec.is_partner ? '<span class="partner-badge">⭐ Партнёр</span>' : ''}
+          </div>
+          <div class="meta">${rec.marketplace.toUpperCase()} · ${rec.season} · ${rec.category}</div>
+          <div class="price">${rec.price_rub.toLocaleString("ru-RU")} ₽</div>
+          <a class="buy-btn" href="${rec.affiliate_url}" target="_blank"
+             onclick="logClick(${JSON.stringify(rec)})">
+            Купить на ${rec.marketplace.toUpperCase()} →
+          </a>
+        </div>
+      `).join("");
+
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="error-msg">❌ Сетевая ошибка: ${err.message}</div>`;
+    }
+  });
+
+  // --- Log click ---
+  async function logClick(rec) {
+    const userId = tg?.initDataUnsafe?.user?.id?.toString() || null;
+    try {
+      await fetch(`${API_BASE}/api/click`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id:       userId,
+          product_name:  rec.product_name,
+          marketplace:   rec.marketplace,
+          affiliate_url: rec.affiliate_url,
+        }),
+      });
+    } catch { /* best-effort */ }
+  }
+
+  loadMakes();
+</script>
+</body>
+</html>

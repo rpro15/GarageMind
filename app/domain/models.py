@@ -64,6 +64,65 @@ class VinDecoded:
 
 
 @dataclass(frozen=True)
+class RecommendRequest:
+    car_make: str
+    car_model: str
+    car_year: int
+    category: str
+    season: str
+    driving_style: str
+    budget_rub: int
+
+
+@dataclass(frozen=True)
+class ProductRecommendation:
+    rank: int
+    product_name: str
+    category: str
+    season: str
+    price_rub: int
+    marketplace: str
+    affiliate_url: str
+    image_url: str | None
+    is_partner: bool
+    source: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "rank": self.rank,
+            "product_name": self.product_name,
+            "category": self.category,
+            "season": self.season,
+            "price_rub": self.price_rub,
+            "marketplace": self.marketplace,
+            "affiliate_url": self.affiliate_url,
+            "image_url": self.image_url,
+            "is_partner": self.is_partner,
+            "source": self.source,
+        }
+
+
+@dataclass(frozen=True)
+class RecommendResult:
+    recommendations: list[ProductRecommendation]
+    car_make: str
+    car_model: str
+    car_year: int
+    partner_priority: list[str]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "recommendations": [r.to_dict() for r in self.recommendations],
+            "car": {
+                "make": self.car_make,
+                "model": self.car_model,
+                "year": self.car_year,
+            },
+            "partner_priority": self.partner_priority,
+        }
+
+
+@dataclass(frozen=True)
 class VinDecodeResult:
     vin: str
     is_valid: bool

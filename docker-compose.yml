@@ -1,0 +1,91 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# GarageMind — Docker Compose
+#
+# Services:
+#   api      — Flask REST API (existing)
+#   bot      — Telegram bot (Aiogram 3.x)
+#   miniapp  — Telegram Mini App static files served by Nginx
+#   redis    — Optional cache (used when REDIS_URL is set in api service)
+#
+# Quick start:
+#   cp .env.example .env        # fill in BOT_TOKEN, DEEPSEEK_API_KEY, etc.
+#   docker compose up --build
+# ---------------------------------------------------------------------------
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Flask API
+  # --------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PART_RECOGNITION_PROVIDER: ${PART_RECOGNITION_PROVIDER:-stub}
+      PRODUCT_SEARCH_PROVIDER: ${PRODUCT_SEARCH_PROVIDER:-stub}
+      PARTNER_MARKETPLACES: ${PARTNER_MARKETPLACES:-ozon,wildberries,admitad,yandex_market}
+      MAX_IMAGE_BYTES: ${MAX_IMAGE_BYTES:-5242880}
+      DB_PATH: /data/garagemind.db
+      REDIS_URL: redis://redis:6379/0
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_PARTNER_ID: ${DEEPSEEK_PARTNER_ID:-GARAGEMIND}
+    volumes:
+      - db_data:/data
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/cars')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # Telegram Bot
+  # --------------------------------------------------------------------------
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      API_BASE_URL: http://api:8000
+      MINIAPP_URL: ${MINIAPP_URL:-}
+    depends_on:
+      - api
+
+  # --------------------------------------------------------------------------
+  # Telegram Mini App (Nginx serving static HTML/JS)
+  # --------------------------------------------------------------------------
+  miniapp:
+    build:
+      context: ./miniapp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+  # --------------------------------------------------------------------------
+  # Redis — optional cache for recommendation results
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  db_data:
