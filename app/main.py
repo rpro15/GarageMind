@@ -8,7 +8,9 @@ from flask import Flask, g, request
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
 from app.config.settings import Settings
+from app.services.affiliate import ClickTrackingService
 from app.services.part_recognition import build_part_recognition_service
+from app.services.recommendation import PartnerRegistry, ProductCatalog, RecommendationRanker
 from app.services.vin_decoder import VinDecoderService
 
 
@@ -29,6 +31,8 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.extensions["services"] = {
         "part_recognition": build_part_recognition_service(active_settings, app.logger),
         "vin_decoder": VinDecoderService(app.logger),
+        "recommendation": RecommendationRanker(ProductCatalog(), PartnerRegistry()),
+        "click_tracking": ClickTrackingService(app.logger),
     }
 
     @app.before_request
