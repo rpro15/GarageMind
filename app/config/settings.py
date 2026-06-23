@@ -26,12 +26,16 @@ def _read_int(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+DEFAULT_DATABASE_PATH = "garagemind.db"
+
+
 @dataclass(frozen=True)
 class Settings:
     max_image_bytes: int = 5 * 1024 * 1024
     allowed_image_mime_types: tuple[str, ...] = DEFAULT_ALLOWED_IMAGE_MIME_TYPES
     recognition_provider: str = "stub"
     log_level: str = "INFO"
+    database_path: str = DEFAULT_DATABASE_PATH
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,4 +54,5 @@ class Settings:
             allowed_image_mime_types=mime_types or DEFAULT_ALLOWED_IMAGE_MIME_TYPES,
             recognition_provider=os.getenv("PART_RECOGNITION_PROVIDER", "stub").strip().lower() or "stub",
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper() or "INFO",
+            database_path=os.getenv("DATABASE_PATH", DEFAULT_DATABASE_PATH).strip() or DEFAULT_DATABASE_PATH,
         )

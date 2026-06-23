@@ -44,6 +44,22 @@ class RecognitionResult:
 
 
 @dataclass(frozen=True)
+class CatalogPart:
+    id: int
+    part_name: str
+    category: str
+    created_at: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "part_name": self.part_name,
+            "category": self.category,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass(frozen=True)
 class VinDecoded:
     wmi: str | None
     region: str | None

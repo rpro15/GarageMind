@@ -21,6 +21,7 @@ class ApiTestCase(unittest.TestCase):
                 allowed_image_mime_types=("image/png", "image/jpeg", "image/webp"),
                 recognition_provider="stub",
                 log_level="DEBUG",
+                database_path=":memory:",
             )
         )
         app.testing = True

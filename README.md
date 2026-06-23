@@ -1,11 +1,11 @@
 # GarageMind
 
-GarageMind now exposes a production-oriented HTTP API for two first-iteration capabilities:
+GarageMind exposes a production-oriented HTTP API for two first-iteration capabilities:
 
 - photo-based part recognition with a deterministic local stub provider;
 - VIN validation and decoding with proper check-digit verification.
 
-The current iteration is intentionally stateless: there is **no database yet**. The architecture keeps provider and service boundaries explicit so a real catalog, model provider, and persistence layer can be added later without rewriting the HTTP contract.
+Starting with this iteration the project gains a **database-backed part catalog**.  A SQLite database is created automatically on first startup and seeded with the default part catalog.  The architecture keeps provider and service boundaries explicit so a real catalog, model provider, and persistence layer can be added later without rewriting the HTTP contract.
 
 ## Stack
 
@@ -41,6 +41,7 @@ Environment variables are loaded directly from the process environment.
 | `ALLOWED_IMAGE_MIME_TYPES` | `image/jpeg,image/png,image/webp,image/gif,image/bmp` | Allowed upload types |
 | `PART_RECOGNITION_PROVIDER` | `stub` | Provider toggle; unknown values fall back to stub |
 | `LOG_LEVEL` | `INFO` | Application log level |
+| `DATABASE_PATH` | `garagemind.db` | Path to the SQLite database file; use `:memory:` for an ephemeral in-process database |
 
 ## Project structure
 
@@ -50,12 +51,15 @@ app/
     errors.py
     routes.py
   adapters/
+    in_memory_catalog_repository.py
+    sqlite_catalog_repository.py
     stub_part_recognition.py
   config/
     settings.py
   domain/
     models.py
   ports/
+    catalog_repository.py
     part_recognition.py
   services/
     part_recognition.py
@@ -63,10 +67,60 @@ app/
   main.py
 tests/
   test_api.py
+  test_catalog.py
   test_vin_decoder.py
 ```
 
 ## API
+
+### `GET /api/catalog`
+
+Returns all parts in the catalog.  The catalog is seeded from the built-in part list on first startup.
+
+#### Response
+
+```json
+{
+  "parts": [
+    {
+      "id": 1,
+      "part_name": "Brake Pad Set",
+      "category": "braking",
+      "created_at": "2024-01-01T00:00:00+00:00"
+    }
+  ],
+  "total": 8
+}
+```
+
+### `GET /api/catalog/<id>`
+
+Returns a single catalog part by its integer id.
+
+#### Success response
+
+```json
+{
+  "id": 1,
+  "part_name": "Brake Pad Set",
+  "category": "braking",
+  "created_at": "2024-01-01T00:00:00+00:00"
+}
+```
+
+#### Not-found response
+
+Status: `404 Not Found`
+
+```json
+{
+  "error": {
+    "code": "part_not_found",
+    "message": "No catalog part with id 999.",
+    "request_id": "8a9f..."
+  }
+}
+```
 
 ### `POST /api/recognize-part`
 
@@ -207,12 +261,16 @@ Status: `422 Unprocessable Entity`
 - Part recognition is implemented behind a provider port so a real model adapter can replace the stub later.
 - VIN decoding is deterministic and fully test-covered for checksum and edge cases.
 - Responses include `X-Request-Id` headers for request tracing.
+- The catalog repository is accessed through the `CatalogRepository` port; the SQLite adapter can be replaced with any other storage backend without touching the HTTP layer.
+
+## Storage
+
+On startup, `create_app` builds a `SqliteCatalogRepository` from `DATABASE_PATH` and seeds it with the default part catalog if the table is empty.  The database schema is created automatically via `CREATE TABLE IF NOT EXISTS` so no migration tooling is required for the initial schema.
 
 ## Current limitation and roadmap
 
-This PR does **not** add a database or paid external APIs. Suggested follow-up path:
+Suggested follow-up path:
 
-1. add a catalog-backed part entity model and persistence layer;
-2. plug a real vision provider into the part recognition port;
-3. enrich VIN decoding with a larger WMI/manufacturer dataset;
-4. add inventory/catalog joins once the DB layer exists.
+1. plug a real vision provider into the part recognition port;
+2. enrich VIN decoding with a larger WMI/manufacturer dataset;
+3. add inventory/catalog joins once the catalog schema stabilises.
