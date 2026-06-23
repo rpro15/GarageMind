@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Main conversation handlers: /start → car setup → results."""
 
+import html
 import os
 from aiogram import F, Router
 from aiogram.filters import CommandStart
@@ -243,8 +244,9 @@ async def handle_budget(message: Message, state: FSMContext) -> None:
     lines = []
     for rec in recommendations:
         partner_badge = "⭐" if rec.get("is_partner") else ""
+        safe_name = html.escape(rec['product_name'])
         lines.append(
-            f"{rec['rank']}. {partner_badge}<b>{rec['product_name']}</b>\n"
+            f"{rec['rank']}. {partner_badge}<b>{safe_name}</b>\n"
             f"   💰 {rec['price_rub']:,} ₽ · {rec['marketplace'].upper()}"
         )
 

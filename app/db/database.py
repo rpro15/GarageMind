@@ -26,9 +26,10 @@ CREATE TABLE IF NOT EXISTS click_log (
 _local = threading.local()
 
 
-def _connect(db_path: str) -> sqlite3.Connection:
-    if not hasattr(_local, "conn") or _local.db_path != db_path:
-        conn = sqlite3.connect(db_path, check_same_thread=False)
+def _get_conn(db_path: str) -> sqlite3.Connection:
+    """Return a per-thread SQLite connection, creating it on first use."""
+    if getattr(_local, "db_path", None) != db_path or not hasattr(_local, "conn"):
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         _local.conn = conn
         _local.db_path = db_path
@@ -36,16 +37,22 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 class Database:
-    """Thin SQLite wrapper used by the Flask API and the Telegram bot."""
+    """Thin SQLite wrapper used by the Flask API and the Telegram bot.
+
+    Each thread gets its own connection via threading.local, which avoids
+    sharing a single connection across threads and the race conditions that
+    entails.  A per-instance write lock serialises concurrent writes from
+    different threads so WAL is not required.
+    """
 
     def __init__(self, db_path: str = "garagemind.db") -> None:
         self._db_path = db_path
-        self._lock = threading.Lock()
+        self._write_lock = threading.Lock()
         self._init_schema()
 
     def _init_schema(self) -> None:
-        with self._lock:
-            conn = _connect(self._db_path)
+        with self._write_lock:
+            conn = _get_conn(self._db_path)
             conn.executescript(_DDL)
             conn.commit()
 
@@ -60,8 +67,8 @@ class Database:
         car_model: str | None = None,
         car_year: int | None = None,
     ) -> None:
-        with self._lock:
-            conn = _connect(self._db_path)
+        with self._write_lock:
+            conn = _get_conn(self._db_path)
             conn.execute(
                 """
                 INSERT INTO users (user_id, car_make, car_model, car_year)
@@ -76,7 +83,7 @@ class Database:
             conn.commit()
 
     def get_user(self, user_id: str) -> dict | None:
-        conn = _connect(self._db_path)
+        conn = _get_conn(self._db_path)
         row = conn.execute(
             "SELECT * FROM users WHERE user_id = ?", (user_id,)
         ).fetchone()
@@ -93,8 +100,8 @@ class Database:
         marketplace: str,
         affiliate_url: str,
     ) -> None:
-        with self._lock:
-            conn = _connect(self._db_path)
+        with self._write_lock:
+            conn = _get_conn(self._db_path)
             conn.execute(
                 """
                 INSERT INTO click_log (user_id, product_name, marketplace, affiliate_url)
@@ -105,7 +112,7 @@ class Database:
             conn.commit()
 
     def get_clicks(self, limit: int = 100) -> list[dict]:
-        conn = _connect(self._db_path)
+        conn = _get_conn(self._db_path)
         rows = conn.execute(
             "SELECT * FROM click_log ORDER BY clicked_at DESC LIMIT ?", (limit,)
         ).fetchall()

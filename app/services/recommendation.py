@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import logging
 
 from app.api.errors import ApiError
@@ -100,7 +101,7 @@ class RecommendationService:
         if not request.car_model or not request.car_model.strip():
             errors.append("car_model is required.")
 
-        current_year = 2026
+        current_year = datetime.datetime.now().year
         if not (1900 <= request.car_year <= current_year + 1):
             errors.append(
                 f"car_year must be between 1900 and {current_year + 1}."

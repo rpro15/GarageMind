@@ -89,7 +89,7 @@ class DeepSeekProductSearchProvider(ProductSearchProvider):
             data=body,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"******",
+                "Authorization": "Bearer " + self._api_key,
             },
             method="POST",
         )
