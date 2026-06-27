@@ -13,6 +13,16 @@ class DeepSeekClient(LLMClient):
         self.timeout = 30.0
 
     async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        # Если нет API-ключа — возвращаем заглушку
+        if not self.api_key:
+            return (
+                "Рекомендуемые шины для вашего автомобиля:\n"
+                "- Michelin Pilot Sport 4 (лето) — отличное сцепление, ~12 000₽/шт\n"
+                "- Continental PremiumContact 6 (лето) — комфорт и тишина, ~10 500₽/шт\n"
+                "- Nokian Tyres Hakka Blue 3 (лето) — безопасность, ~11 000₽/шт\n"
+                "Рекомендуем размеры: 225/55 R17 или 215/55 R17."
+            )
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})

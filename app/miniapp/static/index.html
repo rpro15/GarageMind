@@ -3,71 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GarageMind — подбор шин</title>
+    <title>Авто Эксперт AI</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <div id="app">
+        <!-- Шапка -->
         <header>
-            <h1><i class="fas fa-car"></i> GarageMind</h1>
-            <p>Подбор шин и дисков</p>
+            <div class="header-top">
+                <div class="brand">
+                    <i class="fas fa-microchip"></i>
+                    <span>Авто Эксперт <em>AI</em></span>
+                </div>
+                <div class="header-badge">
+                    <span class="dot"></span>
+                    <span>Online</span>
+                </div>
+            </div>
+            <div class="header-sub">
+                <i class="fas fa-robot"></i>
+                <span>AI-консультант по подбору шин</span>
+            </div>
         </header>
-        <main>
-            <form id="tireForm">
-                <div class="form-group">
-                    <label for="brand">Марка</label>
-                    <select id="brand" required>
-                        <option value="">Выберите марку</option>
-                    </select>
+
+        <!-- Чат -->
+        <div id="chat">
+            <div id="messages"></div>
+        </div>
+
+        <!-- Панель ввода -->
+        <div id="input-area">
+            <button id="micBtn" class="mic-btn" title="Голосовой ввод">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <input type="text" id="chatInput" placeholder="Напишите или нажмите микрофон..." autocomplete="off">
+            <button id="sendBtn" class="send-btn" title="Отправить">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+
+        <!-- Индикатор распознавания речи -->
+        <div id="speechIndicator" class="hidden">
+            <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+            <span>Слушаю...</span>
+        </div>
+
+        <!-- Результаты -->
+        <div id="resultsOverlay" class="hidden">
+            <div id="resultsPanel">
+                <div class="results-header">
+                    <h2><i class="fas fa-star"></i> Рекомендации</h2>
+                    <button id="closeResults"><i class="fas fa-times"></i></button>
                 </div>
-                <div class="form-group">
-                    <label for="model">Модель</label>
-                    <select id="model" required disabled>
-                        <option value="">Сначала выберите марку</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="year">Год выпуска</label>
-                    <input type="number" id="year" placeholder="например, 2020" min="1980" max="2026" required>
-                </div>
-                <div class="form-group">
-                    <label>Стиль вождения</label>
-                    <div class="radio-group">
-                        <label><input type="radio" name="driving_style" value="comfort" checked> Комфорт</label>
-                        <label><input type="radio" name="driving_style" value="sport"> Спорт</label>
-                        <label><input type="radio" name="driving_style" value="economy"> Экономия</label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="budget">Бюджет (₽ за комплект)</label>
-                    <input type="number" id="budget" placeholder="Необязательно">
-                </div>
-                <div class="form-group">
-                    <label>Сезон</label>
-                    <div class="radio-group">
-                        <label><input type="radio" name="season" value="summer" checked> Лето</label>
-                        <label><input type="radio" name="season" value="winter"> Зима</label>
-                        <label><input type="radio" name="season" value="all_season"> Всесезон</label>
-                    </div>
-                </div>
-                <button type="submit" id="submitBtn">
-                    <i class="fas fa-search"></i> Подобрать шины
-                </button>
-            </form>
-            <div id="results" style="display: none;">
-                <h2>Рекомендации</h2>
                 <div id="advice" class="advice-box"></div>
                 <div id="product-list" class="product-list"></div>
+                <div id="loading-results" class="hidden">
+                    <div class="spinner"></div>
+                    <p>Нейросеть анализирует...</p>
+                </div>
             </div>
-            <div id="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Ищем лучшие шины...</p>
-            </div>
-        </main>
-        <footer>
-            <p>🔗 Мы получаем комиссию от партнёров</p>
-        </footer>
+        </div>
     </div>
     <script src="script.js"></script>
 </body>

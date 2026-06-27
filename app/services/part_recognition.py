@@ -153,7 +153,7 @@ class PartRecognitionService:
         safe_filename = os.path.basename(filename) if filename else None
         self._logger.debug(
             "Recognizing part via provider=%s mime=%s size=%s filename=%s",
-            self._settings.recognition_provider,
+            self._settings.PART_RECOGNITION_PROVIDER,
             sniffed_mime_type,
             payload_size,
             safe_filename,
@@ -171,12 +171,12 @@ class PartRecognitionService:
 
 def build_part_recognition_service(settings: Settings, logger: logging.Logger) -> PartRecognitionService:
     provider: PartRecognitionProvider
-    if settings.recognition_provider == "stub":
+    if settings.PART_RECOGNITION_PROVIDER == "stub":
         provider = StubPartRecognitionProvider()
     else:
         logger.warning(
             "Unsupported part recognition provider '%s'; falling back to stub provider.",
-            settings.recognition_provider,
+            settings.PART_RECOGNITION_PROVIDER,
         )
         provider = StubPartRecognitionProvider()
 

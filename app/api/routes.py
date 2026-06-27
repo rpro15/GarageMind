@@ -1,13 +1,27 @@
 from __future__ import annotations
 
+import logging
+
 from flask import Blueprint, current_app, jsonify, request
 
+from app.adapters.deepseek_client import DeepSeekClient
+from app.adapters.partner_api import MockPartnerCatalog
 from app.api.errors import ApiError
+from app.domain.models import TireRequest, DrivingStyle, Season
 from app.services.part_recognition import PartRecognitionService
+from app.services.tire_recomendation import TireRecommendationService
 from app.services.vin_decoder import VinDecoderService
 
 
+logger = logging.getLogger(__name__)
+
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
+
+
+@api_blueprint.route('/health', methods=['GET'])
+def health():
+    """Healthcheck для Docker."""
+    return jsonify({"status": "ok", "service": "avto-expert-ai"}), 200
 
 
 def _part_service() -> PartRecognitionService:
@@ -17,6 +31,14 @@ def _part_service() -> PartRecognitionService:
 def _vin_service() -> VinDecoderService:
     return current_app.extensions["services"]["vin_decoder"]
 
+
+def _tire_service() -> TireRecommendationService:
+    return current_app.extensions["services"]["tire_recommendation"]
+
+
+# ──────────────────────────────────────────────
+#  Recognise part
+# ──────────────────────────────────────────────
 
 @api_blueprint.post("/recognize-part")
 def recognize_part():
@@ -60,6 +82,10 @@ def recognize_part():
     )
 
 
+# ──────────────────────────────────────────────
+#  Decode VIN
+# ──────────────────────────────────────────────
+
 @api_blueprint.route("/decode-vin", methods=["GET", "POST"])
 def decode_vin():
     vin_value = request.args.get("vin", "")
@@ -83,12 +109,13 @@ def decode_vin():
     result = _vin_service().decode(vin_value)
     return jsonify(result.to_dict()), 200 if result.is_valid else 422
 
-llm_client = DeepSeekClient()
-catalog = MockPartnerCatalog()
-recommendation_service = TireRecommendationService(llm_client, catalog)
 
-@api_bp.route('/recommend_tires', methods=['POST'])
-async def recommend_tires():
+# ──────────────────────────────────────────────
+#  Tire recommendation (Mini App endpoints)
+# ──────────────────────────────────────────────
+
+@api_blueprint.route('/recommend_tires', methods=['POST'])
+def recommend_tires():
     """Эндпоинт для Mini App: принимает JSON с параметрами, возвращает рекомендации."""
     data = request.get_json()
     if not data:
@@ -105,14 +132,15 @@ async def recommend_tires():
             year=int(data['year']),
             driving_style=DrivingStyle(data['driving_style']),
             budget=int(data['budget']) if data.get('budget') else None,
-            season=Season(data['season']) if data.get('season') else None
+            season=Season(data['season']) if data.get('season') else None,
         )
     except (ValueError, KeyError) as e:
         return jsonify({"error": f"Invalid parameter: {str(e)}"}), 400
     
+    import asyncio
     try:
-        result = await recommendation_service.get_recommendation(tire_request)
-    except Exception as e:
+        result = asyncio.run(_tire_service().get_recommendation(tire_request))
+    except Exception:
         logger.exception("Recommendation failed")
         return jsonify({"error": "Internal server error"}), 500
     
@@ -126,7 +154,7 @@ async def recommend_tires():
                 "currency": p.currency,
                 "image_url": p.image_url,
                 "partner_link": p.partner_link,
-                "source": p.source
+                "source": p.source,
             } for p in result.products
         ],
         "request": {
@@ -135,22 +163,24 @@ async def recommend_tires():
             "year": result.request.year,
             "driving_style": result.request.driving_style.value,
             "budget": result.request.budget,
-            "season": result.request.season.value if result.request.season else None
-        }
+            "season": result.request.season.value if result.request.season else None,
+        },
     }
     return jsonify(response), 200
 
-@api_bp.route('/brands', methods=['GET'])
+
+@api_blueprint.route('/brands', methods=['GET'])
 def get_brands():
     """Возвращает список популярных марок."""
     brands = [
         "Lada", "Kia", "Hyundai", "Toyota", "Volkswagen", 
         "Skoda", "Nissan", "Mitsubishi", "BMW", "Mercedes-Benz",
-        "Audi", "Ford", "Renault", "Chevrolet", "Mazda"
+        "Audi", "Ford", "Renault", "Chevrolet", "Mazda",
     ]
     return jsonify(sorted(brands)), 200
 
-@api_bp.route('/models', methods=['GET'])
+
+@api_blueprint.route('/models', methods=['GET'])
 def get_models():
     """Возвращает модели для выбранной марки (заглушка)."""
     brand = request.args.get('brand')

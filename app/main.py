@@ -1,34 +1,70 @@
-# app/main.py
 import os
 import asyncio
+import logging
 import threading
+
 from flask import Flask
 from flask_cors import CORS
-from app.api.routes import api_bp
+
+from app.api.errors import register_error_handlers
+from app.api.routes import api_blueprint
 from app.config.settings import settings
-import logging
+from app.services.part_recognition import build_part_recognition_service
+from app.services.vin_decoder import VinDecoderService
+from app.adapters.deepseek_client import DeepSeekClient
+from app.adapters.partner_api import MockPartnerCatalog
+from app.services.tire_recomendation import TireRecommendationService
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = settings.SECRET_KEY
-CORS(app)  # разрешаем CORS для Mini App
 
-app.register_blueprint(api_bp)
+def create_app() -> Flask:
+    # Flask со статикой для Mini App
+    app = Flask(__name__,
+                static_folder="miniapp/static",
+                static_url_path="/miniapp")
+    app.config['SECRET_KEY'] = settings.SECRET_KEY
+    CORS(app)
 
-def run_bot():
-    """Запуск Telegram бота в отдельном потоке."""
-    from app.bot.dispatcher import start_bot
-    asyncio.run(start_bot())
+    app.register_blueprint(api_blueprint)
+    register_error_handlers(app)
+
+    # Инициализация сервисов
+    part_service = build_part_recognition_service(settings, logger)
+    vin_service = VinDecoderService(logger)
+    llm_client = DeepSeekClient()
+    catalog = MockPartnerCatalog()
+    tire_service = TireRecommendationService(llm_client, catalog)
+
+    app.extensions["services"] = {
+        "part_recognition": part_service,
+        "vin_decoder": vin_service,
+        "tire_recommendation": tire_service,
+    }
+
+    return app
+
 
 def main():
-    # Запускаем бота в фоновом потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
+    app = create_app()
+
+    # Бота запускаем только если есть токен
+    # И aiogram 3+ должен работать в главном потоке, поэтому
+    # для локальной разработки просто пропускаем
+    if settings.BOT_TOKEN:
+        try:
+            logger.info("BOT_TOKEN is set but aiogram polling is disabled in dev mode")
+            logger.info("Run bot separately if needed: python -m app.bot.dispatcher")
+        except Exception as e:
+            logger.warning("Bot startup skipped: %s", e)
+    else:
+        logger.info("BOT_TOKEN not set — bot disabled (ok for local dev)")
+
     port = int(os.environ.get("PORT", 8000))
+    logger.info("Starting Flask server on 0.0.0.0:%s", port)
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 if __name__ == "__main__":
     main()
