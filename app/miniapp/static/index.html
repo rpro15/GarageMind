@@ -16,40 +16,108 @@
                     <i class="fas fa-microchip"></i>
                     <span>Авто Эксперт <em>AI</em></span>
                 </div>
-                <div class="header-badge">
-                    <span class="dot"></span>
-                    <span>Online</span>
+                <div class="header-actions">
+                    <button id="modeToggle" class="mode-btn" title="Переключить режим">
+                        <i class="fas fa-comment-dots"></i>
+                    </button>
+                    <div class="header-badge">
+                        <span class="dot"></span>
+                        <span>Online</span>
+                    </div>
                 </div>
             </div>
-            <div class="header-sub">
+            <div class="header-sub" id="headerSub">
                 <i class="fas fa-robot"></i>
                 <span>AI-консультант по подбору шин</span>
             </div>
         </header>
 
-        <!-- Чат -->
-        <div id="chat">
-            <div id="messages"></div>
+        <!-- Режим 1: Чат -->
+        <div id="chatMode" class="mode-panel">
+            <div id="chat">
+                <div id="messages"></div>
+            </div>
+            <div id="input-area">
+                <button id="micBtn" class="mic-btn" title="Голосовой ввод">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <input type="text" id="chatInput" placeholder="Напишите или нажмите микрофон..." autocomplete="off">
+                <button id="sendBtn" class="send-btn" title="Отправить">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+            <div id="speechIndicator" class="hidden">
+                <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
+                <span>Слушаю...</span>
+            </div>
         </div>
 
-        <!-- Панель ввода -->
-        <div id="input-area">
-            <button id="micBtn" class="mic-btn" title="Голосовой ввод">
-                <i class="fas fa-microphone"></i>
-            </button>
-            <input type="text" id="chatInput" placeholder="Напишите или нажмите микрофон..." autocomplete="off">
-            <button id="sendBtn" class="send-btn" title="Отправить">
-                <i class="fas fa-paper-plane"></i>
-            </button>
+        <!-- Режим 2: Форма -->
+        <div id="formMode" class="mode-panel hidden">
+            <form id="tireForm">
+                <div class="form-group">
+                    <label for="brand"><i class="fas fa-car"></i> Марка</label>
+                    <select id="brand" required>
+                        <option value="">Выберите марку</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="model"><i class="fas fa-car-side"></i> Модель</label>
+                    <select id="model" required disabled>
+                        <option value="">Сначала выберите марку</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label for="year"><i class="fas fa-calendar"></i> Год</label>
+                        <input type="number" id="year" placeholder="2020" min="1980" max="2026" required>
+                    </div>
+                    <div class="form-group half">
+                        <label for="budget"><i class="fas fa-coins"></i> Бюджет (₽)</label>
+                        <input type="number" id="budget" placeholder="Не обязательно">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-road"></i> Стиль вождения</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="driving_style" value="comfort" checked>
+                            <span>🚗 Комфорт</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="driving_style" value="sport">
+                            <span>🏎️ Спорт</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="driving_style" value="economy">
+                            <span>⛽ Эконом</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-cloud-sun"></i> Сезон</label>
+                    <div class="radio-group">
+                        <label class="radio-btn">
+                            <input type="radio" name="season" value="summer" checked>
+                            <span>☀️ Лето</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="season" value="winter">
+                            <span>❄️ Зима</span>
+                        </label>
+                        <label class="radio-btn">
+                            <input type="radio" name="season" value="all_season">
+                            <span>🌦️ Всесезон</span>
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" id="submitBtn">
+                    <i class="fas fa-magic"></i> Подобрать шины
+                </button>
+            </form>
         </div>
 
-        <!-- Индикатор распознавания речи -->
-        <div id="speechIndicator" class="hidden">
-            <div class="wave"><span></span><span></span><span></span><span></span><span></span></div>
-            <span>Слушаю...</span>
-        </div>
-
-        <!-- Результаты -->
+        <!-- Результаты (единый оверлей) -->
         <div id="resultsOverlay" class="hidden">
             <div id="resultsPanel">
                 <div class="results-header">

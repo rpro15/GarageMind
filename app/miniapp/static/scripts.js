@@ -5,7 +5,7 @@
 const API_BASE = window.location.origin;
 const $ = id => document.getElementById(id);
 
-// DOM-элементы
+// ===== DOM =====
 const messagesEl = $('messages');
 const chatInput = $('chatInput');
 const sendBtn = $('sendBtn');
@@ -17,11 +17,21 @@ const adviceDiv = $('advice');
 const productListDiv = $('product-list');
 const closeResultsBtn = $('closeResults');
 const loadingResults = $('loading-results');
+const modeToggle = $('modeToggle');
+const chatMode = $('chatMode');
+const formMode = $('formMode');
+const headerSub = $('headerSub');
+const tireForm = $('tireForm');
+const brandSelect = $('brand');
+const modelSelect = $('model');
+const yearInput = $('year');
+const budgetInput = $('budget');
 
 let tg = window.Telegram?.WebApp;
 if (tg) { tg.expand(); tg.ready(); }
 
-// ===== Данные пользователя =====
+// ===== Состояние =====
+let currentMode = 'chat'; // 'chat' | 'form'
 const userData = {
     brand: null,
     model: null,
@@ -30,11 +40,10 @@ const userData = {
     season: null,
     budget: null
 };
-
 let currentStep = 0;
 let isProcessing = false;
 
-// ===== Русские модели =====
+// ===== Справочники =====
 const MODELS_RU = {
     "Lada": ["Granta", "Vesta", "Niva Legend", "Niva Travel", "Largus", "Kalina", "Priora", "XRAY"],
     "Kia": ["Rio", "Sportage", "Cerato", "Stinger", "Soul", "Seltos", "Sorento", "Picanto"],
@@ -54,6 +63,7 @@ const MODELS_RU = {
 };
 
 const BRANDS = Object.keys(MODELS_RU).sort();
+
 const DRIVING_STYLES = {
     "комфорт": "comfort",
     "комфортный": "comfort",
@@ -81,14 +91,13 @@ const MONTHS_SEASON = {
     "зима": "winter",
 };
 
-// ===== Шаги диалога =====
+// ===== Шаги диалога (чат) =====
 const DIALOG = [
     {
-        question: "Привет! Я AI-консультант по подбору шин 🚗\n\nС какой маркой автомобиля вы хотите подобрать шины?",
+        question: "Привет! Я AI-консультант по подбору шин 🚗\n\nС какой маркой автомобиля?",
         parse: (text) => {
             const found = BRANDS.find(b => text.toLowerCase().includes(b.toLowerCase()));
             if (found) return { valid: true, value: found };
-            // ищем частичное совпадение
             for (const b of BRANDS) {
                 if (text.length >= 3 && b.toLowerCase().startsWith(text.toLowerCase().slice(0, 3))) {
                     return { valid: true, value: b };
@@ -112,7 +121,7 @@ const DIALOG = [
         }
     },
     {
-        question: "Какой год выпуска вашего авто?",
+        question: "Какой год выпуска?",
         parse: (text) => {
             const nums = text.match(/\d{4}/);
             if (nums) {
@@ -123,7 +132,7 @@ const DIALOG = [
         }
     },
     {
-        question: "Какой стиль вождения предпочитаете?\n\n🚗 Комфорт — плавная езда, тишина\n🏎️ Спорт — динамичное вождение\n⛽ Эконом — экономия топлива",
+        question: "Стиль вождения?\n\n🚗 Комфорт — плавная езда\n🏎️ Спорт — динамика\n⛽ Эконом — экономия",
         parse: (text) => {
             const t = text.toLowerCase();
             for (const [key, val] of Object.entries(DRIVING_STYLES)) {
@@ -142,7 +151,6 @@ const DIALOG = [
             for (const [key, val] of Object.entries(SEASONS)) {
                 if (t.includes(key)) return { valid: true, value: val };
             }
-            // по месяцу
             for (const [key, val] of Object.entries(MONTHS_SEASON)) {
                 if (t.includes(key)) return { valid: true, value: val };
             }
@@ -153,7 +161,7 @@ const DIALOG = [
         }
     },
     {
-        question: "Какой бюджет на комплект шин? (в рублях)\n\nМожно указать сумму или пропустить (скажите 'нет' или 'любой')",
+        question: "Какой бюджет? (₽)\n\nМожно пропустить — скажите 'любой'",
         parse: (text) => {
             const t = text.toLowerCase();
             if (t.includes("нет") || t.includes("любой") || t.includes("не") || t.includes("пропустить") || t.includes("без")) {
@@ -166,19 +174,44 @@ const DIALOG = [
     },
 ];
 
-// ===== Добавление сообщения в чат =====
+// ===== Переключение режимов =====
+function switchMode(mode) {
+    currentMode = mode;
+    if (mode === 'chat') {
+        chatMode.classList.remove('hidden');
+        formMode.classList.add('hidden');
+        modeToggle.classList.remove('form-active');
+        modeToggle.innerHTML = '<i class="fas fa-list"></i>';
+        headerSub.innerHTML = '<i class="fas fa-robot"></i> <span>AI-консультант по подбору шин</span>';
+        // Если чат пустой — начать диалог
+        if (messagesEl.children.length === 0) {
+            setTimeout(() => askQuestion(0), 300);
+        }
+    } else {
+        chatMode.classList.add('hidden');
+        formMode.classList.remove('hidden');
+        modeToggle.classList.add('form-active');
+        modeToggle.innerHTML = '<i class="fas fa-comment-dots"></i>';
+        headerSub.innerHTML = '<i class="fas fa-sliders-h"></i> <span>Быстрый подбор шин</span>';
+        loadFormBrands();
+    }
+    document.getElementById('app').classList.remove('step-0', 'step-1', 'step-2', 'step-3', 'step-4', 'step-5');
+}
+
+modeToggle.addEventListener('click', () => {
+    switchMode(currentMode === 'chat' ? 'form' : 'chat');
+});
+
+// ===== Чат: сообщения =====
 function addMessage(text, type = 'bot') {
     const div = document.createElement('div');
     div.className = `msg ${type}`;
-
     const avatar = document.createElement('div');
     avatar.className = 'msg-avatar';
     avatar.innerHTML = type === 'bot' ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>';
-
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
     bubble.textContent = text;
-
     div.appendChild(avatar);
     div.appendChild(bubble);
     messagesEl.appendChild(div);
@@ -190,15 +223,12 @@ function addTyping() {
     const div = document.createElement('div');
     div.className = 'msg bot';
     div.id = 'typingIndicator';
-
     const avatar = document.createElement('div');
     avatar.className = 'msg-avatar';
     avatar.innerHTML = '<i class="fas fa-robot"></i>';
-
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
     bubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
-
     div.appendChild(avatar);
     div.appendChild(bubble);
     messagesEl.appendChild(div);
@@ -215,19 +245,13 @@ function scrollChat() {
     chat.scrollTop = chat.scrollHeight;
 }
 
-// ===== Смена фона по шагу =====
 function setStepClass(step) {
     const app = document.getElementById('app');
-    // Удаляем все step- классы
-    for (let i = 0; i <= 6; i++) {
-        app.classList.remove(`step-${i}`);
-    }
-    if (step >= 0 && step <= 5) {
-        app.classList.add(`step-${step}`);
-    }
+    for (let i = 0; i <= 6; i++) app.classList.remove(`step-${i}`);
+    if (step >= 0 && step <= 5) app.classList.add(`step-${step}`);
 }
 
-// ===== Вопрос =====
+// ===== Чат: вопросы =====
 function askQuestion(step) {
     const dialog = DIALOG[step];
     if (!dialog) return;
@@ -236,7 +260,6 @@ function askQuestion(step) {
     setStepClass(step);
 }
 
-// ===== Обработка ответа =====
 function handleUserInput(text) {
     if (isProcessing) return;
     text = text.trim();
@@ -252,41 +275,25 @@ function handleUserInput(text) {
 
     if (!result.valid) {
         addTyping();
-        setTimeout(() => {
-            removeTyping();
-            addMessage(result.hint);
-        }, 600);
+        setTimeout(() => { removeTyping(); addMessage(result.hint); }, 600);
         return;
     }
 
-    // Сохраняем значение
     const keys = ['brand', 'model', 'year', 'driving_style', 'season', 'budget'];
     userData[keys[currentStep]] = result.value;
     currentStep++;
 
     if (currentStep >= DIALOG.length) {
-        // Все данные собраны — отправляем
         addTyping();
-        setTimeout(() => {
-            removeTyping();
-            sendRecommendation();
-        }, 800);
+        setTimeout(() => { removeTyping(); sendRecommendation(); }, 800);
     } else {
-        // Следующий вопрос
-        setTimeout(() => {
-            askQuestion(currentStep);
-        }, 400);
+        setTimeout(() => askQuestion(currentStep), 400);
     }
 }
 
-// ===== Отправка запроса =====
-async function sendRecommendation() {
-    addMessage("Спасибо! Анализирую ваш авто... 🤖");
-    addTyping();
-
-    loadingResults.classList.remove('hidden');
-
-    const payload = {
+// ===== Общий запрос к API =====
+async function sendRecommendation(payloadOverride) {
+    const payload = payloadOverride || {
         brand: userData.brand,
         model: userData.model,
         year: userData.year,
@@ -295,6 +302,12 @@ async function sendRecommendation() {
         budget: userData.budget
     };
 
+    if (currentMode === 'chat') {
+        addMessage("Спасибо! Анализирую ваш авто... 🤖");
+        addTyping();
+    }
+    loadingResults.classList.remove('hidden');
+
     try {
         const response = await fetch(`${API_BASE}/api/recommend_tires`, {
             method: 'POST',
@@ -302,11 +315,11 @@ async function sendRecommendation() {
             body: JSON.stringify(payload)
         });
 
-        removeTyping();
+        if (currentMode === 'chat') removeTyping();
 
         if (!response.ok) {
             const err = await response.json();
-            addMessage(`Ошибка: ${err.error || 'Что-то пошло не так'}`);
+            if (currentMode === 'chat') addMessage(`Ошибка: ${err.error || 'Что-то пошло не так'}`);
             return;
         }
 
@@ -314,21 +327,23 @@ async function sendRecommendation() {
         loadingResults.classList.add('hidden');
         showResults(data);
 
-        addMessage("Готово! Смотрите рекомендации ниже 👇");
+        if (currentMode === 'chat') {
+            addMessage("Готово! Смотрите рекомендации ниже 👇");
+        }
 
         if (tg) {
             tg.sendData(JSON.stringify({ action: 'recommendation', ...data }));
         }
 
     } catch (err) {
-        removeTyping();
+        if (currentMode === 'chat') removeTyping();
         loadingResults.classList.add('hidden');
-        addMessage(`Ошибка соединения: ${err.message}`);
+        if (currentMode === 'chat') addMessage(`Ошибка соединения: ${err.message}`);
         console.error(err);
     }
 }
 
-// ===== Показ результатов =====
+// ===== Результаты =====
 function showResults(data) {
     adviceDiv.innerHTML = `<p>${data.advice}</p>`;
     productListDiv.innerHTML = '';
@@ -337,11 +352,9 @@ function showResults(data) {
         data.products.forEach(product => {
             const card = document.createElement('div');
             card.className = 'product-card';
-
             const img = document.createElement('img');
             img.src = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"%3E%3Crect width="56" height="56" fill="%230a0d14" rx="8"/%3E%3Ccircle cx="28" cy="28" r="12" fill="none" stroke="%2300d4ff" stroke-width="1.5"/%3E%3C/svg%3E';
             img.alt = product.name;
-
             const info = document.createElement('div');
             info.className = 'product-info';
             info.innerHTML = `
@@ -349,24 +362,76 @@ function showResults(data) {
                 <div class="price">${product.price.toLocaleString('ru-RU')} ₽</div>
                 <div class="source">${product.source || 'Партнёр'}</div>
             `;
-
             const link = document.createElement('a');
             link.href = product.partner_link || '#';
             link.target = '_blank';
             link.className = 'product-link';
             link.textContent = 'Купить';
-
             card.appendChild(img);
             card.appendChild(info);
             card.appendChild(link);
             productListDiv.appendChild(card);
         });
     } else {
-        productListDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Товаров не найдено. Попробуйте изменить параметры.</p>';
+        productListDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Товаров не найдено.</p>';
     }
 
     resultsOverlay.classList.remove('hidden');
 }
+
+// ===== Форма =====
+async function loadFormBrands() {
+    try {
+        const response = await fetch(`${API_BASE}/api/brands`);
+        const brands = await response.json();
+        brandSelect.innerHTML = '<option value="">Выберите марку</option>';
+        brands.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            brandSelect.appendChild(opt);
+        });
+    } catch (e) {
+        brandSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+}
+
+brandSelect.addEventListener('change', async () => {
+    const brand = brandSelect.value;
+    if (!brand) {
+        modelSelect.innerHTML = '<option value="">Сначала выберите марку</option>';
+        modelSelect.disabled = true;
+        return;
+    }
+    // Локальные модели
+    const localModels = MODELS_RU[brand] || ['Другая'];
+    modelSelect.innerHTML = '<option value="">Выберите модель</option>';
+    localModels.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        modelSelect.appendChild(opt);
+    });
+    modelSelect.disabled = false;
+});
+
+tireForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        brand: brandSelect.value,
+        model: modelSelect.value,
+        year: parseInt(yearInput.value),
+        driving_style: document.querySelector('input[name="driving_style"]:checked')?.value || 'comfort',
+        season: document.querySelector('input[name="season"]:checked')?.value || 'summer',
+        budget: budgetInput.value ? parseInt(budgetInput.value) : null,
+    };
+    if (!payload.brand || !payload.model || !payload.year) {
+        alert('Заполните все обязательные поля');
+        return;
+    }
+    loadingResults.classList.remove('hidden');
+    await sendRecommendation(payload);
+});
 
 // ===== Голосовой ввод =====
 let recognition = null;
@@ -376,45 +441,35 @@ function initSpeech() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         micBtn.style.opacity = '0.4';
-        micBtn.title = 'Голосовой ввод не поддерживается в этом браузере';
+        micBtn.title = 'Голосовой ввод не поддерживается';
         return;
     }
-
     recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.continuous = false;
     recognition.interimResults = false;
-
     recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         stopListening();
         chatInput.value = transcript;
         handleUserInput(transcript);
     };
-
     recognition.onerror = (event) => {
         stopListening();
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
-            addMessage(`Ошибка распознавания: ${event.error}`, 'bot');
+            addMessage(`Ошибка: ${event.error}`, 'bot');
         }
     };
-
-    recognition.onend = () => {
-        stopListening();
-    };
+    recognition.onend = () => stopListening();
 }
 
 function toggleListening() {
     if (!recognition) {
-        addMessage("Голосовой ввод не поддерживается в вашем браузере. Попробуйте Chrome на Android или ПК.", 'bot');
+        addMessage("Голосовой ввод не поддерживается в вашем браузере", 'bot');
         return;
     }
-
-    if (isListening) {
-        stopListening();
-    } else {
-        startListening();
-    }
+    if (isListening) stopListening();
+    else startListening();
 }
 
 function startListening() {
@@ -424,9 +479,7 @@ function startListening() {
         micBtn.classList.add('listening');
         speechIndicator.classList.remove('hidden');
         micBtn.innerHTML = '<i class="fas fa-stop"></i>';
-    } catch (e) {
-        console.warn('Speech start error:', e);
-    }
+    } catch (e) {}
 }
 
 function stopListening() {
@@ -451,9 +504,7 @@ resultsOverlay.addEventListener('click', (e) => {
 // ===== Старт =====
 function init() {
     initSpeech();
-    setTimeout(() => {
-        askQuestion(0);
-    }, 500);
+    switchMode('chat'); // по умолчанию чат
 }
 
 init();

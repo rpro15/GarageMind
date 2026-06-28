@@ -3,7 +3,7 @@ import asyncio
 import logging
 import threading
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 
 from app.api.errors import register_error_handlers
@@ -14,8 +14,29 @@ from app.services.vin_decoder import VinDecoderService
 from app.adapters.deepseek_client import DeepSeekClient
 from app.adapters.partner_api import MockPartnerCatalog
 from app.services.tire_recomendation import TireRecommendationService
+from app.monitoring.metrics import setup_monitoring
 
-logging.basicConfig(level=settings.LOG_LEVEL)
+# Структурированное логирование
+try:
+    import structlog
+    structlog.configure(
+        processors=[
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer()
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+except ImportError:
+    pass
+
+logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +47,14 @@ def create_app() -> Flask:
                 static_url_path="/miniapp")
     app.config['SECRET_KEY'] = settings.SECRET_KEY
     CORS(app)
+
+    # Настройка мониторинга (Prometheus метрики + request ID + structured logs)
+    metrics = setup_monitoring(app)
+
+    # Healthcheck на корню (для Docker)
+    @app.route('/health', methods=['GET'])
+    def health():
+        return jsonify({"status": "ok", "service": "avto-expert-ai"}), 200
 
     app.register_blueprint(api_blueprint)
     register_error_handlers(app)

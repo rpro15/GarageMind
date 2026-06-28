@@ -105,7 +105,7 @@ class Product:
     id: str
     name: str
     price: float
-    source: str  # 'ozon', 'wb', 'yandex', etc.
+    source: str = "partner"
     currency: str = "RUB"
     image_url: Optional[str] = None
     partner_link: Optional[str] = None
