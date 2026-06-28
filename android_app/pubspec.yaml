@@ -1,0 +1,47 @@
+name: avto_expert_ai
+description: Авто Эксперт AI — умный подбор шин и дисков
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  lottie: ^3.0.0
+
+  # Networking
+  http: ^1.2.0
+  web_socket_channel: ^2.4.0
+
+  # State
+  provider: ^6.1.1
+
+  # Voice
+  speech_to_text: ^6.5.0
+
+  # Telegram Mini App SDK
+  telegram_webapp: ^0.0.3
+
+  # Storage
+  shared_preferences: ^2.2.2
+
+  # URL launcher
+  url_launcher: ^6.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/animations/
+    - assets/images/
