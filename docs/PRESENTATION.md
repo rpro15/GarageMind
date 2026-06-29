@@ -10,17 +10,30 @@
 
 | Чат-консультант | Меню выбора языка | Диалог подбора |
 |:---:|:---:|:---:|
-| ![Чат RU](screenshots/01_chat.png) | ![Языки](screenshots/02_lang_menu.png) | ![Диалог](screenshots/03_chat_dialog.png) |
+| ![Чат RU](/screenshots/01_chat.png) | ![Языки](/screenshots/02_lang_menu.png) | ![Диалог](/screenshots/03_chat_dialog.png) |
 
 | Форма быстрого подбора | Форма с данными |
 |:---:|:---:|
-| ![Форма](screenshots/02_form.png) | ![Форма заполнена](screenshots/04_form_filled.png) |
+| ![Форма](/screenshots/02_form.png) | ![Форма заполнена](/screenshots/04_form_filled.png) |
 
 ### 🇬🇧 English Version
 
 | Chat Interface | Quick Select Form |
 |:---:|:---:|
-| ![Chat EN](screenshots/03_chat_en.png) | ![Form EN](screenshots/04_form_en.png) |
+| ![Chat EN](/screenshots/03_chat_en.png) | ![Form EN](/screenshots/04_form_en.png) |
+
+---
+
+## 🖼️ Полная презентация
+
+Открой самодостаточный HTML-файл (все скриншоты внутри, 0.8 MB, работает без интернета):  
+👉 **[PRESENTATION.html](PRESENTATION.html)**
+
+Или посмотри обложку:
+
+![Обложка презентации](/screenshots/presentation_cover.png)
+
+![Полная презентация](/screenshots/presentation_full.png)
 
 ---
 
