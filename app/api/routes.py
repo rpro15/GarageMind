@@ -180,6 +180,23 @@ def get_brands():
     return jsonify(sorted(brands)), 200
 
 
+@api_blueprint.route('/lang/<lang_code>', methods=['GET'])
+def get_lang(lang_code):
+    """Возвращает JSON-файл локализации."""
+    import json, os
+    # __file__ = app/api/routes.py -> поднимаемся до корня проекта
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lang_path = os.path.join(base, 'miniapp', 'static', 'lang', f'{lang_code}.json')
+    if not os.path.exists(lang_path):
+        lang_path = os.path.join(base, 'miniapp', 'static', 'lang', 'ru.json')
+    try:
+        with open(lang_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @api_blueprint.route('/models', methods=['GET'])
 def get_models():
     """Возвращает модели для выбранной марки (заглушка)."""

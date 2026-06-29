@@ -47,6 +47,69 @@ let currentStep = 0;
 let isProcessing = false;
 let lastRecommendationData = null;
 
+// ===== I18N =====
+let currentLang = localStorage.getItem('lang') || 'ru';
+let translations = {};
+
+async function loadLang(lang) {
+    try {
+        const resp = await fetch(API_BASE + '/api/lang/' + lang);
+        if (!resp.ok) throw new Error('Not found');
+        translations = await resp.json();
+        currentLang = lang;
+        localStorage.setItem('lang', lang);
+        document.documentElement.lang = lang;
+        translateUI();
+        var lbl = document.getElementById('langLabel');
+        if (lbl) lbl.textContent = lang.toUpperCase();
+        document.querySelectorAll('.lang-option').forEach(function(opt) {
+            opt.classList.toggle('active', opt.dataset.lang === lang);
+        });
+        return true;
+    } catch(e) {
+        console.warn('Lang load failed:', lang, e);
+        if (lang !== 'ru') return await loadLang('ru');
+        return false;
+    }
+}
+
+function __(key) {
+    return translations[key] || key;
+}
+
+function translateUI() {
+    document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        el.textContent = __(el.dataset.i18n);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+        el.placeholder = __(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(function(el) {
+        el.title = __(el.dataset.i18nTitle);
+    });
+    var hs = document.getElementById('headerSub');
+    if (hs) hs.innerHTML = '<i class="fas fa-robot"></i> <span>' + __('header.chat_subtitle') + '</span>';
+}
+
+document.addEventListener('click', function(e) {
+    var btn = document.getElementById('langBtn');
+    var menu = document.getElementById('langMenu');
+    if (btn && menu) {
+        if (btn.contains(e.target)) {
+            menu.classList.toggle('hidden');
+        } else if (!menu.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    }
+});
+
+document.querySelectorAll('.lang-option').forEach(function(opt) {
+    opt.addEventListener('click', function() {
+        loadLang(opt.dataset.lang);
+        document.getElementById('langMenu').classList.add('hidden');
+    });
+});
+
 // ===== ПОЛНАЯ БАЗА МАРОК И МОДЕЛЕЙ (РФ рынок) =====
 const MODELS_RU = {
     // === Россия ===
@@ -628,6 +691,7 @@ resultsOverlay.addEventListener('click', (e) => {
 // ===== Старт =====
 function init() {
     initSpeech();
+    loadLang('ru');
     switchMode('chat'); // по умолчанию чат
 }
 
