@@ -17,6 +17,9 @@ const adviceDiv = $('advice');
 const productListDiv = $('product-list');
 const closeResultsBtn = $('closeResults');
 const loadingResults = $('loading-results');
+const popularPickDiv = $('popularPick');
+const popularContentDiv = $('popularContent');
+const shareBtn = $('shareBtn');
 const modeToggle = $('modeToggle');
 const chatMode = $('chatMode');
 const formMode = $('formMode');
@@ -42,24 +45,113 @@ const userData = {
 };
 let currentStep = 0;
 let isProcessing = false;
+let lastRecommendationData = null;
 
-// ===== Справочники =====
+// ===== ПОЛНАЯ БАЗА МАРОК И МОДЕЛЕЙ (РФ рынок) =====
 const MODELS_RU = {
-    "Lada": ["Granta", "Vesta", "Niva Legend", "Niva Travel", "Largus", "Kalina", "Priora", "XRAY"],
-    "Kia": ["Rio", "Sportage", "Cerato", "Stinger", "Soul", "Seltos", "Sorento", "Picanto"],
-    "Hyundai": ["Solaris", "Creta", "Tucson", "Elantra", "Santa Fe", "Sonata", "Palisade"],
-    "Toyota": ["Camry", "Corolla", "RAV4", "Land Cruiser 300", "Yaris", "Highlander", "C-HR", "Hilux"],
-    "Volkswagen": ["Polo", "Golf", "Passat", "Tiguan", "Jetta", "Teramont", "Taos", "ID.4"],
-    "Skoda": ["Octavia", "Rapid", "Kodiaq", "Karoq", "Superb", "Fabia", "Yeti"],
-    "Nissan": ["Qashqai", "X-Trail", "Terrano", "Almera", "Juke", "Murano", "Pathfinder"],
-    "Mitsubishi": ["Outlander", "Pajero Sport", "L200", "ASX", "Eclipse Cross", "Lancer"],
-    "BMW": ["X5", "X3", "3 Series", "5 Series", "X1", "X7", "iX", "M5"],
-    "Mercedes-Benz": ["GLC", "GLE", "E-Class", "C-Class", "GLA", "GLB", "S-Class", "G-Class"],
-    "Audi": ["Q5", "Q7", "A6", "A4", "Q3", "A8", "e-tron", "RS6"],
-    "Ford": ["Focus", "Kuga", "Explorer", "Transit", "Ranger", "Mustang", "Puma"],
-    "Renault": ["Logan", "Duster", "Kaptur", "Arkana", "Sandero", "Megane", "Koleos"],
-    "Chevrolet": ["Niva", "Tahoe", "Camaro", "Cruze", "Traverse", "Suburban"],
-    "Mazda": ["CX-5", "Mazda 6", "CX-9", "MX-5", "CX-30", "Mazda 3"],
+    // === Россия ===
+    "Lada": ["Granta", "Vesta", "Niva Legend", "Niva Travel", "Largus", "Kalina", "Priora", "XRAY", "Vesta Cross", "Largus Cross"],
+    "Москвич": ["Москвич 3", "Москвич 3e", "Москвич 6", "Москвич 8"],
+    "Evolute": ["Evolute i-PRO", "Evolute i-JOY", "Evolute i-SKY", "Evolute i-VAN"],
+    "Aurus": ["Aurus Senat", "Aurus Komendant", "Aurus Arsenal"],
+    "УАЗ": ["Патриот", "Хантер", "Буханка (2206)", "Профи", "Pickup", "Симбир"],
+    "ГАЗ": ["ГАЗель Next", "ГАЗель NN", "ГАЗель Бизнес", "Соболь NN", "Валдай 8"],
+    "КАМАЗ": ["Камаз 54901", "Камаз 43118", "Камаз 65115"],
+    "Daewoo": ["Nexia", "Matiz", "Lanos", "Gentra", "Lacetti"],
+    "ЗАЗ": ["ЗАЗ Sens", "ЗАЗ Vida", "ЗАЗ Chance"],
+
+    // === Германия/Европа ===
+    "Volkswagen": ["Polo", "Golf", "Passat", "Tiguan", "Touareg", "Jetta", "Teramont", "Taos", "ID.4", "ID.6", "Caddy", "Caravelle", "Multivan", "Amarok"],
+    "Skoda": ["Octavia", "Rapid", "Kodiaq", "Karoq", "Superb", "Fabia", "Yeti", "Scala", "Enyaq iV"],
+    "BMW": ["X3", "X5", "X1", "X7", "3 Series", "5 Series", "7 Series", "X4", "X6", "iX", "i5", "i4", "M3", "M5"],
+    "Mercedes-Benz": ["GLC", "GLE", "E-Class", "C-Class", "GLA", "GLB", "S-Class", "G-Class", "GLS", "V-Class", "A-Class", "EQC", "EQS", "AMG GT"],
+    "Audi": ["Q5", "Q7", "A6", "A4", "Q3", "A8", "e-tron", "RS6", "Q8", "A5", "A7", "Q2", "Q4 e-tron"],
+    "Porsche": ["Cayenne", "Macan", "Panamera", "911", "Taycan", "Cayenne Coupe"],
+    "Opel": ["Astra", "Mokka", "Crossland", "Grandland", "Insignia", "Combo", "Zafira", "Vivaro"],
+    "Renault": ["Logan", "Duster", "Kaptur", "Arkana", "Sandero", "Megane", "Koleos", "Talisman", "Master"],
+    "Peugeot": ["3008", "5008", "208", "2008", "508", "408", "Partner", "Boxer", "Landtrek"],
+    "Citroen": ["C3", "C4", "C5 Aircross", "C4 Picasso", "Berlingo", "Jumper", "C4 Cactus"],
+    "Fiat": ["Panda", "500", "Doblo", "Ducato", "Tipo", "500X", "Fullback"],
+    "Volvo": ["XC60", "XC90", "XC40", "S90", "V60", "V90 Cross Country", "S60", "EX30", "EX90"],
+    "Jaguar": ["F-Pace", "E-Pace", "I-Pace", "XF", "XE", "F-Type", "XJ"],
+    "Land Rover": ["Range Rover", "Range Rover Sport", "Discovery", "Discovery Sport", "Velar", "Evoque", "Defender"],
+    "Alfa Romeo": ["Giulia", "Stelvio", "Tonale", "Junior", "33 Stradale"],
+    "Maserati": ["Grecale", "Levante", "MC20", "Quattroporte", "Ghibli", "GranTurismo", "GranCabrio"],
+    "Ferrari": ["Purosangue", "SF90 Stradale", "296 GTB", "Roma", "F8 Tributo", "812 Superfast", "Monza SP2"],
+    "Lamborghini": ["Urus", "Huracán", "Revuelto", "Temerario", "Countach LPI 800-4"],
+    "Bentley": ["Bentayga", "Flying Spur", "Continental GT", "Mulsanne", "Batur"],
+    "Rolls-Royce": ["Cullinan", "Ghost", "Phantom", "Spectre", "Dawn", "Wraith"],
+    "Aston Martin": ["DBX", "DB12", "Vantage", "DBS", "Valhalla", "DBX707"],
+    "Mini": ["Cooper", "Cooper S", "Countryman", "Clubman", "Aceman", "Electric", "JCW GP", "Cabrio"],
+    "Smart": ["Fortwo", "Forfour", "#1", "#3", "#5", "Crossblade"],
+
+    // === Корея ===
+    "Kia": ["Rio", "Sportage", "Cerato", "Stinger", "Soul", "Seltos", "Sorento", "Picanto", "Mohave", "Carnival", "K5", "K9", "EV6", "EV9", "Niro"],
+    "Hyundai": ["Solaris", "Creta", "Tucson", "Elantra", "Santa Fe", "Sonata", "Palisade", "Staria", "IONIQ 5", "IONIQ 6", "Kona", "Bayon", "Grandeur", "Nexo"],
+    "Genesis": ["G80", "G90", "GV70", "GV80", "GV60"],
+    "SsangYong": ["Korando", "Kyron", "Rexton", "Tivoli", "Musso", "Torres", "Actyon", "Stavic", "Chairman"],
+    "KGM (KG Mobility)": ["Tivoli", "Korando", "Torres", "Musso", "Rexton", "Actyon", "Korando Emoción"],
+
+    // === Япония ===
+    "Toyota": ["Camry", "Corolla", "RAV4", "Land Cruiser 300", "Yaris", "Highlander", "C-HR", "Hilux", "Fortuner", "Corolla Cross", "Land Cruiser Prado", "Hiace", "Alphard", "Supra", "GR86", "bZ4x"],
+    "Nissan": ["Qashqai", "X-Trail", "Terrano", "Almera", "Juke", "Murano", "Pathfinder", "Navara", "Note", "Leaf", "Ariya", "Sylphy", "Sentra", "Z"],
+    "Mitsubishi": ["Outlander", "Pajero Sport", "L200", "ASX", "Eclipse Cross", "Lancer", "Delica", "Pajero", "Xpander"],
+    "Mazda": ["CX-5", "CX-9", "CX-30", "CX-50", "CX-60", "Mazda 6", "MX-5", "Mazda 3", "CX-90", "MX-30"],
+    "Suzuki": ["Vitara", "S-Cross", "Jimny", "Swift", "Ignis", "Baleno", "Across"],
+    "Subaru": ["Forester", "Outback", "XV", "Impreza", "WRX", "Levorg", "Solterra"],
+    "Honda": ["CR-V", "Civic", "Accord", "HR-V", "Pilot", "Jazz", "ZR-V"],
+    "Lexus": ["RX", "NX", "LX", "ES", "UX", "GX", "LC", "LS", "TX", "RZ", "LM"],
+    "Infiniti": ["QX50", "QX55", "QX60", "QX80", "Q50", "Q60"],
+
+    // === США ===
+    "Ford": ["Focus", "Kuga", "Explorer", "Transit", "Ranger", "Mustang", "Puma", "Bronco", "Bronco Sport", "Maverick", "Escape", "Edge", "F-150", "Mustang Mach-E", "Everest"],
+    "Chevrolet": ["Niva", "Tahoe", "Camaro", "Cruze", "Traverse", "Suburban", "Trailblazer", "Captiva", "Blazer", "Malibu", "Silverado", "Equinox", "Tracker"],
+    "Dodge": ["Durango", "Ram 1500", "Charger", "Challenger", "Grand Caravan"],
+    "Jeep": ["Cherokee", "Grand Cherokee", "Wrangler", "Renegade", "Compass", "Gladiator", "Avenger"],
+    "Cadillac": ["Escalade", "XT5", "XT4", "XT6", "CT5", "Lyriq"],
+    "Lincoln": ["Navigator", "Aviator", "Corsair", "Nautilus"],
+    "GMC": ["Yukon", "Acadia", "Terrain", "Sierra", "Canyon", "Hummer EV"],
+    "Tesla": ["Model 3", "Model Y", "Model S", "Model X", "Cybertruck"],
+
+    // === КИТАЙ (все бренды на рынке РФ) ===
+    "Chery": ["Tiggo 4", "Tiggo 7 Pro", "Tiggo 8 Pro", "Tiggo 9", "Tiggo 8 Pro Max", "Arrizo 8", "Tiggo 4 Pro"],
+    "Changan": ["CS35 Plus", "CS55 Plus", "CS75 Plus", "UNI-K", "UNI-T", "UNI-V", "Eado", "Lamore", "Raeton Plus", "Hunter Plus"],
+    "Geely": ["Monjaro", "Atlas Pro", "Coolray", "Tugella", "Emgrand X7", "Okavango", "Geometry C", "Preface", "Boyue", "Xingyue L"],
+    "Haval": ["Jolion", "F7", "F7x", "Dargo", "H6", "H9", "M6 Plus", "H3", "Big Dog", "Raptor", "Xiaolong Max"],
+    "Great Wall": ["Poer Cannon (пикап)", "Wingle 7", "Wingle 5"],
+    "Tank (GWM)": ["Tank 300", "Tank 500", "Tank 400", "Tank 700"],
+    "Omoda": ["Omoda C5", "Omoda S5 GT", "Omoda C7"],
+    "Jaecoo": ["Jaecoo J7", "Jaecoo J8", "Jaecoo J6"],
+    "Exeed": ["Exeed LX", "Exeed TXL", "Exeed VX", "Exeed RX", "Exeed Sterra ES"],
+    "BYD": ["BYD Atto 3 (Yuan Plus)", "BYD Song Plus", "BYD Qin Plus", "BYD Han", "BYD Tang", "BYD Dolphin", "BYD Seagull", "BYD Frigate 07", "BYD Yangwang U8"],
+    "Zeekr": ["Zeekr 001", "Zeekr 007", "Zeekr 009", "Zeekr X", "Zeekr Mix"],
+    "Li Auto": ["Li L7", "Li L8", "Li L9", "Li Mega", "Li L6"],
+    "Neta": ["Neta U", "Neta V", "Neta S", "Neta GT", "Neta L"],
+    "NIO": ["NIO ES6", "NIO ES8", "NIO ET5", "NIO ET7", "NIO EC6", "NIO EL6"],
+    "Voyah": ["Voyah Free", "Voyah Dream", "Voyah Passion", "Voyah Courage"],
+    "Dongfeng": ["Shine Max", "Aeolus Yixuan", "Aeolus Haohan", "Rich 6"],
+    "GAC": ["GAC GS3", "GAC GS4", "GAC GS8", "GAC GN6", "GAC Empow", "GAC Aion Y", "GAC Aion S", "GAC Aion V"],
+    "Hongqi": ["H5", "H9", "HS5", "HS7", "EHS9", "S9"],
+    "FAW": ["Bestune B70", "Bestune T77", "Bestune T99", "Bestune T90"],
+    "DFSK": ["DFSK 500", "DFSK 580", "DFSK 600", "DFSK ix5", "DFSK Mini EV"],
+    "BAIC": ["BJ40", "BJ80", "X5", "X7", "EU5", "U5 Plus"],
+    "Baojun": ["Baojun 510", "Baojun 530", "Baojun KiWi EV", "Baojun Yep", "Baojun Cloud"],
+    "Wuling": ["Wuling Mini EV", "Wuling Bingo", "Wuling Xingchi", "Wuling Air EV", "Wuling Victory"],
+    "Foton": ["Foton Tunland", "Foton Sauvana", "Foton Midi"],
+    "HiPhi": ["HiPhi Y", "HiPhi Z", "HiPhi X", "HiPhi A"],
+    "Xpeng": ["Xpeng G6", "Xpeng G9", "Xpeng P5", "Xpeng P7", "Xpeng X9"],
+    "Lantu": ["Lantu Dreamer", "Lantu Free", "Lantu Passion"],
+    "SWM": ["SWM G01", "SWM G05", "SWM X3", "SWM X7"],
+    "MVM": ["MVM 110", "MVM 310", "MVM 530", "MVM X55 Pro"],
+    "Avatr": ["Avatr 11", "Avatr 12"],
+    "IM Motors": ["IM L6", "IM LS6", "IM LS7"],
+    "AITO": ["AITO M5", "AITO M7", "AITO M9"],
+    "Wey (GWM)": ["Wey Coffee 01", "Wey Coffee 02", "Wey Mocha", "Wey Latte"],
+    "Ora": ["Ora Good Cat", "Ora Ballet Cat", "Ora Lightning Cat"],
+    "Kaiyi": ["Kaiyi X3", "Kaiyi X5", "Kaiyi E5"],
+    "Fengon": ["Fengon 500", "Fengon 580", "Fengon S560", "Fengon ix7"],
+    "Skywell": ["Skywell HT-i", "Skywell ET5"],
+    "Soueast": ["Soueast DX7", "Soueast DX5", "Soueast A5"],
 };
 
 const BRANDS = Object.keys(MODELS_RU).sort();
@@ -343,41 +435,73 @@ async function sendRecommendation(payloadOverride) {
     }
 }
 
-// ===== Результаты =====
+// ===== Результаты (премиум) =====
 function showResults(data) {
+    lastRecommendationData = data;
     adviceDiv.innerHTML = `<p>${data.advice}</p>`;
-    productListDiv.innerHTML = '';
 
+    // ═══ Народный выбор ═══
+    if (data.popular_pick) {
+        popularPickDiv.classList.remove('hidden');
+        popularContentDiv.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="flex:1;">
+                    <div style="font-weight:600; font-size:14px; color:var(--text-primary);">${data.popular_pick.name}</div>
+                    <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
+                        <span style="font-size:15px; font-weight:700; color:var(--gold);">${data.popular_pick.price.toLocaleString('ru-RU')} ₽</span>
+                        <span style="font-size:11px; color:var(--text-muted);">★ ${data.popular_pick.rating || 4.5}</span>
+                    </div>
+                </div>
+                <a href="${data.popular_pick.link || '#'}" target="_blank" style="background:linear-gradient(135deg,var(--gold),#e6c200); color:#000; border:none; padding:8px 16px; border-radius:30px; font-weight:700; font-size:12px; cursor:pointer; text-decoration:none; white-space:nowrap;">Выбрать</a>
+            </div>
+        `;
+    } else {
+        popularPickDiv.classList.add('hidden');
+    }
+
+    // ═══ Товары с ценами ═══
+    productListDiv.innerHTML = '';
     if (data.products && data.products.length > 0) {
-        data.products.forEach(product => {
+        const sorted = [...data.products].sort((a, b) => a.price - b.price);
+        sorted.forEach((product, idx) => {
             const card = document.createElement('div');
-            card.className = 'product-card';
-            const img = document.createElement('img');
-            img.src = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"%3E%3Crect width="56" height="56" fill="%230a0d14" rx="8"/%3E%3Ccircle cx="28" cy="28" r="12" fill="none" stroke="%2300d4ff" stroke-width="1.5"/%3E%3C/svg%3E';
-            img.alt = product.name;
-            const info = document.createElement('div');
-            info.className = 'product-info';
-            info.innerHTML = `
-                <div class="name">${product.name}</div>
-                <div class="price">${product.price.toLocaleString('ru-RU')} ₽</div>
-                <div class="source">${product.source || 'Партнёр'}</div>
+            card.className = 'product-card' + (idx === 0 ? ' best-price' : '');
+            const starsHtml = product.rating ? '★'.repeat(Math.round(product.rating)) + '☆'.repeat(5 - Math.round(product.rating)) : '';
+            card.innerHTML = `
+                ${idx === 0 ? '<div class="best-price-badge"><i class="fas fa-crown"></i> Лучшая цена</div>' : ''}
+                <img src="${product.image_url || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22 viewBox=%220 0 56 56%22%3E%3Crect width=%2256%22 height=%2256%22 fill=%22%230a0d14%22 rx=%228%22/%3E%3Ccircle cx=%2228%22 cy=%2228%22 r=%2212%22 fill=%22none%22 stroke=%22%2300d4ff%22 stroke-width=%221.5%22/%3E%3C/svg%3E'}" alt="${product.name}">
+                <div class="product-info">
+                    <div class="name">${product.name}</div>
+                    <div class="rating-row">${starsHtml ? `<span class="stars">${starsHtml}</span>` : ''}<span class="rating-text">${product.rating ? product.rating.toFixed(1) : ''}</span></div>
+                    <div class="${idx === 0 ? 'best-price-label' : 'price'}">${product.price.toLocaleString('ru-RU')} ₽</div>
+                    <div class="source">${product.source || 'Партнёр'}</div>
+                </div>
+                <a href="${product.partner_link || '#'}" target="_blank" class="product-link">Купить</a>
             `;
-            const link = document.createElement('a');
-            link.href = product.partner_link || '#';
-            link.target = '_blank';
-            link.className = 'product-link';
-            link.textContent = 'Купить';
-            card.appendChild(img);
-            card.appendChild(info);
-            card.appendChild(link);
             productListDiv.appendChild(card);
         });
     } else {
-        productListDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">Товаров не найдено.</p>';
+        productListDiv.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Товаров не найдено.</p>';
+    }
+
+    // ═══ Кнопка поделиться ═══
+    if (navigator.share) {
+        shareBtn.classList.remove('hidden');
+    } else {
+        shareBtn.classList.add('hidden');
     }
 
     resultsOverlay.classList.remove('hidden');
 }
+
+// ===== Поделиться =====
+shareBtn.addEventListener('click', () => {
+    if (!lastRecommendationData) return;
+    const text = `🚗 Авто Эксперт AI рекомендует:\n\n${lastRecommendationData.advice}`;
+    if (navigator.share) {
+        navigator.share({ title: 'Подбор шин AI', text });
+    }
+});
 
 // ===== Форма =====
 async function loadFormBrands() {

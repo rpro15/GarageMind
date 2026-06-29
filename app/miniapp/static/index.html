@@ -9,16 +9,34 @@
 </head>
 <body>
     <div id="app">
-        <!-- Шапка -->
+        <!-- ═══ ШАПКА ═══ -->
         <header>
             <div class="header-top">
                 <div class="brand">
-                    <i class="fas fa-microchip"></i>
-                    <span>Авто Эксперт <em>AI</em></span>
+                    <svg class="brand-logo" viewBox="0 0 32 32" width="28" height="28">
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#00d4ff"/>
+                                <stop offset="100%" style="stop-color:#0088cc"/>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <circle cx="16" cy="16" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2" filter="url(#glow)"/>
+                        <polygon points="12,22 22,16 12,10" fill="url(#logoGrad)" opacity="0.9"/>
+                        <circle cx="22" cy="16" r="3" fill="#00d4ff" filter="url(#glow)"/>
+                    </svg>
+                    <span class="brand-text">Aвто<span class="brand-accent">Эксперт</span></span>
+                    <span class="brand-ai">AI</span>
                 </div>
                 <div class="header-actions">
                     <button id="modeToggle" class="mode-btn" title="Переключить режим">
-                        <i class="fas fa-comment-dots"></i>
+                        <i class="fas fa-list"></i>
                     </button>
                     <div class="header-badge">
                         <span class="dot"></span>
@@ -26,13 +44,106 @@
                     </div>
                 </div>
             </div>
-            <div class="header-sub" id="headerSub">
-                <i class="fas fa-robot"></i>
-                <span>AI-консультант по подбору шин</span>
-            </div>
         </header>
 
-        <!-- Режим 1: Чат -->
+        <!-- ═══ НАВИГАТОР ПО ДЕТАЛЯМ ═══ -->
+        <div class="parts-nav" id="partsNav">
+            <div class="parts-scroll">
+                <button class="part-btn active" data-part="wheel" title="Колёса и шины">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M12 3 L12 5 M12 19 L12 21 M3 12 L5 12 M19 12 L21 12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                        <path d="M4.5 4.5 L6 6 M18 18 L19.5 19.5 M4.5 19.5 L6 18 M18 6 L19.5 4.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+                    </svg>
+                    <span class="part-label">Шины</span>
+                    <span class="part-badge active-badge">Активно</span>
+                </button>
+                <button class="part-btn disabled" data-part="engine" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <rect x="4" y="8" width="16" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M8 8 V6 H16 V8" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M6 13 H4 M18 13 H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M12 8 V10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+                    </svg>
+                    <span class="part-label">Двигатель</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="suspension" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <rect x="3" y="15" width="4" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <rect x="17" y="15" width="4" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <line x1="7" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M7 12 Q5 8 3 5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                        <path d="M17 12 Q19 8 21 5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="part-label">Подвеска</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="brakes" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M12 4 A8 8 0 0 1 20 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"/>
+                        <rect x="10" y="8" width="4" height="8" rx="1" fill="currentColor" opacity="0.3"/>
+                        <line x1="7" y1="17" x2="5" y2="19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <line x1="17" y1="17" x2="19" y2="19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span class="part-label">Тормоза</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="body" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <path d="M4 18 L6 8 L18 8 L20 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        <rect x="8" y="4" width="8" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <circle cx="8" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <circle cx="16" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                    </svg>
+                    <span class="part-label">Кузов</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="electrics" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <path d="M12 2 L10 10 H14 L12 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="12" cy="20" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                    </svg>
+                    <span class="part-label">Электрика</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="exhaust" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <path d="M4 16 Q8 12 12 14 Q16 16 20 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <rect x="9" y="14" width="6" height="3" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                        <circle cx="20" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+                    </svg>
+                    <span class="part-label">Выхлоп</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+                <button class="part-btn disabled" data-part="transmission" title="Скоро">
+                    <svg viewBox="0 0 24 24" width="24" height="24" class="part-icon">
+                        <circle cx="12" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="6" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                        <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="1.2"/>
+                        <path d="M12 12 L8 16 M12 12 L16 16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="part-label">Трансмиссия</span>
+                    <span class="coming-soon">Скоро</span>
+                </button>
+            </div>
+            <div class="parts-gradient-left"></div>
+            <div class="parts-gradient-right"></div>
+        </div>
+
+        <!-- ═══ ПОДЗАГОЛОВОК ДИНАМИЧЕСКИЙ ═══ -->
+        <div class="section-header" id="sectionHeader">
+            <div class="section-header-content">
+                <i class="fas fa-robot section-header-icon"></i>
+                <span id="headerSub">AI-консультант по подбору шин и дисков</span>
+            </div>
+            <div class="section-header-shimmer"></div>
+        </div>
+
+        <!-- ═══ РЕЖИМ 1: ЧАТ ═══ -->
         <div id="chatMode" class="mode-panel">
             <div id="chat">
                 <div id="messages"></div>
@@ -41,7 +152,12 @@
                 <button id="micBtn" class="mic-btn" title="Голосовой ввод">
                     <i class="fas fa-microphone"></i>
                 </button>
-                <input type="text" id="chatInput" placeholder="Напишите или нажмите микрофон..." autocomplete="off">
+                <div class="input-wrapper">
+                    <input type="text" id="chatInput" placeholder="Напишите марку, модель или вопрос..." autocomplete="off">
+                    <button id="attachBtn" class="attach-btn" title="Прикрепить фото">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                </div>
                 <button id="sendBtn" class="send-btn" title="Отправить">
                     <i class="fas fa-paper-plane"></i>
                 </button>
@@ -52,11 +168,11 @@
             </div>
         </div>
 
-        <!-- Режим 2: Форма -->
+        <!-- ═══ РЕЖИМ 2: ФОРМА ═══ -->
         <div id="formMode" class="mode-panel hidden">
             <form id="tireForm">
                 <div class="form-group">
-                    <label for="brand"><i class="fas fa-car"></i> Марка</label>
+                    <label for="brand"><i class="fas fa-car"></i> Марка автомобиля</label>
                     <select id="brand" required>
                         <option value="">Выберите марку</option>
                     </select>
@@ -69,7 +185,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group half">
-                        <label for="year"><i class="fas fa-calendar"></i> Год</label>
+                        <label for="year"><i class="fas fa-calendar"></i> Год выпуска</label>
                         <input type="number" id="year" placeholder="2020" min="1980" max="2026" required>
                     </div>
                     <div class="form-group half">
@@ -82,15 +198,15 @@
                     <div class="radio-group">
                         <label class="radio-btn">
                             <input type="radio" name="driving_style" value="comfort" checked>
-                            <span>🚗 Комфорт</span>
+                            <span><i class="fas fa-car"></i> Комфорт</span>
                         </label>
                         <label class="radio-btn">
                             <input type="radio" name="driving_style" value="sport">
-                            <span>🏎️ Спорт</span>
+                            <span><i class="fas fa-flag-checkered"></i> Спорт</span>
                         </label>
                         <label class="radio-btn">
                             <input type="radio" name="driving_style" value="economy">
-                            <span>⛽ Эконом</span>
+                            <span><i class="fas fa-leaf"></i> Эконом</span>
                         </label>
                     </div>
                 </div>
@@ -99,15 +215,15 @@
                     <div class="radio-group">
                         <label class="radio-btn">
                             <input type="radio" name="season" value="summer" checked>
-                            <span>☀️ Лето</span>
+                            <span><i class="fas fa-sun"></i> Лето</span>
                         </label>
                         <label class="radio-btn">
                             <input type="radio" name="season" value="winter">
-                            <span>❄️ Зима</span>
+                            <span><i class="fas fa-snowflake"></i> Зима</span>
                         </label>
                         <label class="radio-btn">
                             <input type="radio" name="season" value="all_season">
-                            <span>🌦️ Всесезон</span>
+                            <span><i class="fas fa-sync-alt"></i> Всесезон</span>
                         </label>
                     </div>
                 </div>
@@ -117,22 +233,47 @@
             </form>
         </div>
 
-        <!-- Результаты (единый оверлей) -->
+        <!-- ═══ РЕЗУЛЬТАТЫ (оверлей) ═══ -->
         <div id="resultsOverlay" class="hidden">
             <div id="resultsPanel">
                 <div class="results-header">
-                    <h2><i class="fas fa-star"></i> Рекомендации</h2>
+                    <h2><i class="fas fa-star"></i> Рекомендации AI</h2>
                     <button id="closeResults"><i class="fas fa-times"></i></button>
                 </div>
-                <div id="advice" class="advice-box"></div>
-                <div id="product-list" class="product-list"></div>
+                <!-- Загрузка -->
                 <div id="loading-results" class="hidden">
-                    <div class="spinner"></div>
-                    <p>Нейросеть анализирует...</p>
+                    <div class="loader-container">
+                        <div class="loader-rings">
+                            <div class="ring"></div>
+                            <div class="ring"></div>
+                            <div class="ring"></div>
+                        </div>
+                        <p class="loader-text">AI анализирует рынок и отзывы...</p>
+                        <div class="loader-progress">
+                            <div class="loader-bar"></div>
+                        </div>
+                    </div>
                 </div>
+                <!-- Совет AI -->
+                <div id="advice" class="advice-box"></div>
+                <!-- Народный выбор -->
+                <div id="popularPick" class="popular-pick hidden">
+                    <div class="popular-header">
+                        <i class="fas fa-fire"></i>
+                        <span>Народный выбор</span>
+                    </div>
+                    <div id="popularContent"></div>
+                </div>
+                <!-- Список товаров с ценами -->
+                <div class="results-section-title">Где купить по лучшей цене</div>
+                <div id="product-list" class="product-list"></div>
+                <!-- Кнопка поделиться -->
+                <button id="shareBtn" class="share-btn hidden">
+                    <i class="fas fa-share-alt"></i> Поделиться рекомендацией
+                </button>
             </div>
         </div>
     </div>
-    <script src="script.js"></script>
+    <script src="scripts.js"></script>
 </body>
 </html>
