@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../main.dart';
+import '../providers/app_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -10,17 +10,63 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _scrollController = ScrollController();
-  final _textController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final List<ChatMessage> _messages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _addBotMessage(_getGreeting());
+    });
+  }
 
   @override
   void dispose() {
+    _controller.dispose();
     _scrollController.dispose();
-    _textController.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom() {
+  String _getStepQuestion(AppProvider app) {
+    switch (app.chatStep) {
+      case ChatStep.brand:
+        return 'Привет! Я AI-консультант по подбору шин 🚗\n\nС какой маркой автомобиля?';
+      case ChatStep.model:
+        return 'Отлично, ${app.selectedBrand}! Какая модель?';
+      case ChatStep.year:
+        return 'Какой год выпуска?';
+      case ChatStep.drivingStyle:
+        return 'Стиль вождения?\n\n🚗 Комфорт — плавная езда\n🏎️ Спорт — динамика\n⛽ Эконом — экономия';
+      case ChatStep.season:
+        return 'Какой сезон?\n\n☀️ Лето\n❄️ Зима\n🌦️ Всесезон';
+      case ChatStep.budget:
+        return 'Какой бюджет? (₽)\n\nМожно пропустить — напишите "любой"';
+      case ChatStep.done:
+        return '';
+    }
+  }
+
+  String _getGreeting() {
+    return 'Привет! Я AI-консультант по подбору шин 🚗\n\nС какой маркой автомобиля?';
+  }
+
+  void _addBotMessage(String text) {
+    setState(() {
+      _messages.add(ChatMessage(text: text, isBot: true));
+    });
+    _scrollDown();
+  }
+
+  void _addUserMessage(String text) {
+    setState(() {
+      _messages.add(ChatMessage(text: text, isBot: false));
+    });
+    _scrollDown();
+  }
+
+  void _scrollDown() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -32,191 +78,232 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _handleSend() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    _addUserMessage(text);
+    _controller.clear();
+
+    final app = context.read<AppProvider>();
+    final prevStep = app.chatStep;
+    app.handleChatInput(text);
+
+    // Ждём обновления провайдера
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final app2 = context.read<AppProvider>();
+      if (app2.errorMessage != null && app2.chatStep == prevStep) {
+        _addBotMessage(app2.errorMessage!);
+        app2.errorMessage = null;
+      } else if (app2.chatStep != ChatStep.done && app2.chatStep != prevStep) {
+        _addBotMessage(_getStepQuestion(app2));
+      } else if (app2.chatStep == ChatStep.done && app2.isLoading) {
+        _addBotMessage('Спасибо! Анализирую рынок... 🤖');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 32, height: 32,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF00D4FF), Color(0xFF0088CC)],
-                ),
-              ),
-              child: const Icon(Icons.auto_awesome, size: 16, color: Colors.white),
-            ),
-            const SizedBox(width: 10),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('AI Консультант', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                Text('онлайн', style: TextStyle(fontSize: 11, color: Color(0xFF00D4FF))),
-              ],
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Consumer<AppState>(
-        builder: (context, state, _) {
-          return Column(
-            children: [
-              // Сообщения
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  itemCount: state.messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = state.messages[index];
-                    return _buildMessage(msg);
-                  },
-                ),
-              ),
+    return Consumer<AppProvider>(
+      builder: (context, app, _) {
+        // Проверяем, если первый запуск и нет сообщений
+        if (_messages.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_messages.isEmpty) {
+              _addBotMessage(_getStepQuestion(app));
+            }
+          });
+        }
 
-              // Индикатор загрузки
-              if (state.isLoading)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: SizedBox(
-                    width: 16, height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF00D4FF),
+        return Column(
+          children: [
+            // Заголовок-подсказка
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFF1A2630), width: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.smart_toy_outlined, color: Color(0xFF00D4FF), size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'AI-консультант по подбору шин',
+                      style: TextStyle(color: Color(0xFF8899AA), fontSize: 13),
                     ),
                   ),
-                ),
+                ],
+              ),
+            ),
 
-              // Поле ввода
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0E1422),
-                  border: Border(top: BorderSide(color: Color(0xFF1B2740))),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _textController,
-                        style: const TextStyle(color: Color(0xFFE8EDF5), fontSize: 15),
-                        decoration: InputDecoration(
-                          hintText: 'Введите марку и модель...',
-                          hintStyle: const TextStyle(color: Color(0xFF2E4060)),
-                          filled: true,
-                          fillColor: const Color(0xFF080B14),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: const BorderSide(color: Color(0xFF1B2740)),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: _sendMessage,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _sendMessage(_textController.text),
-                      child: Container(
-                        width: 44, height: 44,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF00D4FF), Color(0xFF0088CC)],
-                          ),
-                        ),
-                        child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                      ),
-                    ),
-                  ],
+            // Сообщения
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final msg = _messages[index];
+                  return _MessageBubble(message: msg);
+                },
+              ),
+            ),
+
+            // Input area
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Color(0xFF1A2630), width: 0.5),
                 ),
               ),
-            ],
-          );
-        },
-      ),
+              child: Row(
+                children: [
+                  // Микрофон
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4FF).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.mic, color: Color(0xFF00D4FF), size: 20),
+                      onPressed: () {},
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Поле ввода
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Напишите марку, модель...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        suffixIcon: Container(
+                          margin: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00D4FF).withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF00D4FF), size: 18),
+                            onPressed: () {},
+                          ),
+                        ),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _handleSend(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Отправить
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00D4FF), Color(0xFF0088CC)],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send_rounded, color: Colors.black, size: 18),
+                      onPressed: _handleSend,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
+}
 
-  void _sendMessage(String text) {
-    if (text.trim().isEmpty) return;
-    final state = context.read<AppState>();
-    state.sendMessage(text);
-    _textController.clear();
-    _scrollToBottom();
-  }
+class ChatMessage {
+  final String text;
+  final bool isBot;
 
-  Widget _buildMessage(dynamic msg) {
-    final isUser = msg.isUser;
+  ChatMessage({required this.text, required this.isBot});
+}
+
+class _MessageBubble extends StatelessWidget {
+  final ChatMessage message;
+
+  const _MessageBubble({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            message.isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Аватар AI
-          if (!isUser)
+          if (message.isBot) ...[
             Container(
-              width: 28, height: 28,
-              margin: const EdgeInsets.only(right: 8, top: 4),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF00D4FF), Color(0xFF0088CC)],
-                ),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF00D4FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.auto_awesome, size: 14, color: Colors.white),
+              child: const Icon(Icons.smart_toy, color: Color(0xFF00D4FF), size: 16),
             ),
-
-          // Сообщение
+            const SizedBox(width: 8),
+          ],
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isUser
-                    ? const Color(0xFF00D4FF).withOpacity(0.12)
-                    : const Color(0xFF131B2C),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
-                  bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+                color: message.isBot
+                    ? const Color(0xFF111820)
+                    : const Color(0xFF00D4FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(
+                  message.isBot ? 16 : 16,
+                ).copyWith(
+                  topLeft: message.isBot ? const Radius.circular(4) : null,
+                  topRight: !message.isBot ? const Radius.circular(4) : null,
                 ),
                 border: Border.all(
-                  color: isUser
-                      ? const Color(0xFF00D4FF).withOpacity(0.2)
-                      : const Color(0xFF1B2740),
+                  color: message.isBot
+                      ? const Color(0xFF1A2630)
+                      : const Color(0xFF00D4FF).withOpacity(0.2),
                 ),
               ),
               child: Text(
-                msg.text,
+                message.text,
                 style: TextStyle(
-                  color: const Color(0xFFE8EDF5),
+                  color: message.isBot ? const Color(0xFFE0E8F0) : Colors.white,
                   fontSize: 14,
-                  height: 1.6,
+                  height: 1.5,
                 ),
               ),
             ),
           ),
-
-          // Аватар пользователя
-          if (isUser)
+          if (!message.isBot) ...[
+            const SizedBox(width: 8),
             Container(
-              width: 28, height: 28,
-              margin: const EdgeInsets.only(left: 8, top: 4),
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF1B2740),
+                color: const Color(0xFF00D4FF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.person, size: 16, color: Color(0xFF6B80A0)),
+              child: const Icon(Icons.person, color: Color(0xFF00D4FF), size: 16),
             ),
+          ],
         ],
       ),
     );

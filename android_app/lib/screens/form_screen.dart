@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../main.dart';
-import '../services/api_service.dart';
+import '../models/tire_request.dart';
+import '../providers/app_provider.dart';
 
 class FormScreen extends StatefulWidget {
   const FormScreen({super.key});
@@ -11,271 +11,321 @@ class FormScreen extends StatefulWidget {
 }
 
 class _FormScreenState extends State<FormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  List<String> _brands = [];
-  List<String> _models = [];
-  bool _loadingBrands = true;
+  String? _selectedBrand;
+  String? _selectedModel;
+  final TextEditingController _yearController = TextEditingController();
+  final TextEditingController _budgetController = TextEditingController();
+  DrivingStyle _drivingStyle = DrivingStyle.comfort;
+  Season _season = Season.summer;
 
   @override
   void initState() {
     super.initState();
-    _loadBrands();
-  }
-
-  Future<void> _loadBrands() async {
-    final state = context.read<AppState>();
-    final brands = await state.getBrands();
-    setState(() {
-      _brands = brands;
-      _loadingBrands = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().loadBrands();
     });
   }
 
-  Future<void> _loadModels(String brand) async {
-    final state = context.read<AppState>();
-    final models = await state.getModels(brand);
-    setState(() => _models = models);
+  @override
+  void dispose() {
+    _yearController.dispose();
+    _budgetController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Быстрый подбор'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Consumer<AppState>(
-        builder: (context, state, _) {
-          return Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // Марка
-                _buildLabel('Марка', Icons.directions_car),
-                const SizedBox(height: 8),
-                _loadingBrands
-                    ? const Center(child: CircularProgressIndicator())
-                    : DropdownButtonFormField<String>(
-                        value: state.selectedBrand,
-                        decoration: _inputDecoration(),
-                        dropdownColor: const Color(0xFF0A0F1C),
-                        items: _brands.map((b) => DropdownMenuItem(
-                          value: b, child: Text(b, style: const TextStyle(color: Color(0xFFE8EDF5))),
-                        )).toList(),
-                        onChanged: (val) {
-                          state.selectedBrand = val;
-                          state.selectedModel = null;
-                          state.notifyListeners();
-                          if (val != null) _loadModels(val);
-                        },
-                      ),
-                const SizedBox(height: 20),
-
-                // Модель
-                _buildLabel('Модель', Icons.model_training),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: state.selectedModel,
-                  decoration: _inputDecoration(),
-                  dropdownColor: const Color(0xFF0A0F1C),
-                  items: _models.map((m) => DropdownMenuItem(
-                    value: m, child: Text(m, style: const TextStyle(color: Color(0xFFE8EDF5))),
-                  )).toList(),
-                  onChanged: (val) {
-                    state.selectedModel = val;
-                    state.notifyListeners();
-                  },
+    return Consumer<AppProvider>(
+      builder: (context, app, _) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Подзаголовок
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00D4FF).withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF00D4FF).withOpacity(0.1)),
                 ),
-                const SizedBox(height: 20),
-
-                // Год
-                _buildLabel('Год выпуска', Icons.calendar_today),
-                const SizedBox(height: 8),
-                TextFormField(
-                  initialValue: state.selectedYear?.toString() ?? '',
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Color(0xFFE8EDF5)),
-                  decoration: _inputDecoration(hint: 'Например: 2020'),
-                  onChanged: (val) {
-                    state.selectedYear = int.tryParse(val);
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Стиль вождения
-                _buildLabel('Стиль вождения', Icons.speed),
-                const SizedBox(height: 8),
-                Row(
+                child: const Row(
                   children: [
-                    _buildRadio('Комфорт', 'comfort', state.drivingStyle, (v) {
-                      state.drivingStyle = v;
-                      state.notifyListeners();
-                    }),
-                    const SizedBox(width: 8),
-                    _buildRadio('Спорт', 'sport', state.drivingStyle, (v) {
-                      state.drivingStyle = v;
-                      state.notifyListeners();
-                    }),
-                    const SizedBox(width: 8),
-                    _buildRadio('Эконом', 'economy', state.drivingStyle, (v) {
-                      state.drivingStyle = v;
-                      state.notifyListeners();
-                    }),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Сезон
-                _buildLabel('Сезон', Icons.wb_sunny),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildRadio('Лето', 'summer', state.season, (v) {
-                      state.season = v;
-                      state.notifyListeners();
-                    }),
-                    const SizedBox(width: 8),
-                    _buildRadio('Зима', 'winter', state.season, (v) {
-                      state.season = v;
-                      state.notifyListeners();
-                    }),
-                    const SizedBox(width: 8),
-                    _buildRadio('Всесезон', 'all_season', state.season, (v) {
-                      state.season = v;
-                      state.notifyListeners();
-                    }),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Бюджет
-                _buildLabel('Бюджет (₽)', Icons.monetization_on),
-                const SizedBox(height: 8),
-                TextFormField(
-                  initialValue: state.budget?.toString() ?? '',
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Color(0xFFE8EDF5)),
-                  decoration: _inputDecoration(hint: 'Например: 50000'),
-                  onChanged: (val) {
-                    state.budget = int.tryParse(val);
-                  },
-                ),
-                const SizedBox(height: 32),
-
-                // Кнопка
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00D4FF),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 4,
-                      shadowColor: const Color(0xFF00D4FF).withOpacity(0.25),
+                    Icon(Icons.tune, color: Color(0xFF00D4FF), size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Быстрый подбор шин',
+                      style: TextStyle(color: Color(0xFFE0E8F0), fontSize: 14),
                     ),
-                    onPressed: state.isLoading ? null : () async {
-                      if (state.selectedBrand == null ||
-                          state.selectedModel == null ||
-                          state.selectedYear == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Заполните марку, модель и год')),
-                        );
-                        return;
-                      }
-                      await state.submitForm();
-                      if (context.mounted) {
-                        Navigator.pushNamed(context, '/result');
-                      }
-                    },
-                    child: state.isLoading
-                        ? const SizedBox(
-                            width: 24, height: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.search, color: Colors.white),
-                              SizedBox(width: 12),
-                              Text(
-                                'Подобрать шины',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+              const SizedBox(height: 20),
+
+              // Марка
+              _buildLabel('Марка автомобиля', Icons.directions_car),
+              const SizedBox(height: 8),
+              _buildDropdown<String>(
+                value: _selectedBrand,
+                hint: 'Выберите марку',
+                items: app.brands,
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBrand = val;
+                    _selectedModel = null;
+                  });
+                  if (val != null) app.loadModels(val);
+                },
+                display: (b) => b,
+              ),
+              const SizedBox(height: 20),
+
+              // Модель
+              _buildLabel('Модель', Icons.directions_car_filled),
+              const SizedBox(height: 8),
+              _buildDropdown<String>(
+                value: _selectedModel,
+                hint: _selectedBrand == null ? 'Сначала выберите марку' : 'Выберите модель',
+                items: app.models,
+                onChanged: (val) => setState(() => _selectedModel = val),
+                display: (m) => m,
+                enabled: _selectedBrand != null,
+              ),
+              const SizedBox(height: 20),
+
+              // Год и бюджет
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Год выпуска', Icons.calendar_today),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _yearController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            hintText: '2024',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Бюджет (₽)', Icons.monetization_on),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _budgetController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            hintText: 'Не обязательно',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Стиль вождения
+              _buildLabel('Стиль вождения', Icons.alt_route),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildRadioChip(
+                    icon: Icons.directions_car,
+                    label: 'Комфорт',
+                    selected: _drivingStyle == DrivingStyle.comfort,
+                    onTap: () => setState(() => _drivingStyle = DrivingStyle.comfort),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildRadioChip(
+                    icon: Icons.flag,
+                    label: 'Спорт',
+                    selected: _drivingStyle == DrivingStyle.sport,
+                    onTap: () => setState(() => _drivingStyle = DrivingStyle.sport),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildRadioChip(
+                    icon: Icons.eco,
+                    label: 'Эконом',
+                    selected: _drivingStyle == DrivingStyle.economy,
+                    onTap: () => setState(() => _drivingStyle = DrivingStyle.economy),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Сезон
+              _buildLabel('Сезон', Icons.cloud),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildRadioChip(
+                    icon: Icons.wb_sunny,
+                    label: 'Лето',
+                    selected: _season == Season.summer,
+                    onTap: () => setState(() => _season = Season.summer),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildRadioChip(
+                    icon: Icons.ac_unit,
+                    label: 'Зима',
+                    selected: _season == Season.winter,
+                    onTap: () => setState(() => _season = Season.winter),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildRadioChip(
+                    icon: Icons.sync,
+                    label: 'Всесезон',
+                    selected: _season == Season.allSeason,
+                    onTap: () => setState(() => _season = Season.allSeason),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Кнопка отправки
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _submit,
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text('Подобрать шины', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLabel(String text, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF00D4FF)),
-        const SizedBox(width: 8),
+        Icon(icon, color: const Color(0xFF00D4FF), size: 14),
+        const SizedBox(width: 6),
         Text(
           text,
           style: const TextStyle(
-            color: Color(0xFF8899BB),
+            color: Color(0xFF8899AA),
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
     );
   }
 
-  InputDecoration _inputDecoration({String? hint}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF2E4060)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  Widget _buildDropdown<T>({
+    required T? value,
+    required String hint,
+    required List<T> items,
+    required ValueChanged<T?> onChanged,
+    required String Function(T) display,
+    bool enabled = true,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF111820),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1A2630)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: Text(hint, style: const TextStyle(color: Color(0xFF556677))),
+          onChanged: enabled ? onChanged : null,
+          isExpanded: true,
+          dropdownColor: const Color(0xFF111820),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          items: items.map((item) {
+            return DropdownMenuItem(value: item, child: Text(display(item)));
+          }).toList(),
+        ),
+      ),
     );
   }
 
-  Widget _buildRadio(String label, String value, String groupValue, ValueChanged<String> onChanged) {
-    final selected = value == groupValue;
+  Widget _buildRadioChip({
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => onChanged(value),
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: selected
-                ? const Color(0xFF00D4FF).withOpacity(0.08)
-                : const Color(0xFF0A0F1C),
+                ? const Color(0xFF00D4FF).withOpacity(0.1)
+                : const Color(0xFF111820),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? const Color(0xFF00D4FF) : const Color(0xFF1B2740),
+              color: selected
+                  ? const Color(0xFF00D4FF)
+                  : const Color(0xFF1A2630),
+              width: selected ? 1.5 : 1,
             ),
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: selected ? const Color(0xFF00D4FF) : const Color(0xFF6B80A0),
-              fontWeight: FontWeight.w500,
-              fontSize: 13,
-            ),
+          child: Column(
+            children: [
+              Icon(icon, color: selected ? const Color(0xFF00D4FF) : const Color(0xFF556677), size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFF556677),
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  void _submit() {
+    if (_selectedBrand == null || _selectedModel == null || _yearController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните все обязательные поля')),
+      );
+      return;
+    }
+
+    final year = int.tryParse(_yearController.text);
+    if (year == null || year < 1980 || year > 2026) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введите корректный год (1980-2026)')),
+      );
+      return;
+    }
+
+    final budget = _budgetController.text.isNotEmpty
+        ? int.tryParse(_budgetController.text)
+        : null;
+
+    context.read<AppProvider>().submitForm(
+      brand: _selectedBrand!,
+      model: _selectedModel!,
+      year: year,
+      style: _drivingStyle,
+      season: _season,
+      budget: budget,
     );
   }
 }

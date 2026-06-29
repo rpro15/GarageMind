@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AvtoExpert" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#080B14</item>
-        <item name="android:navigationBarColor">#080B14</item>
-        <item name="android:windowBackground">#080B14</item>
+    <style name="Theme.AvtoExpertAI" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorBackground">#0A0D14</item>
+        <item name="android:statusBarColor">#0A0D14</item>
+        <item name="android:navigationBarColor">#0A0D14</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorBackground">#0A0D14</item>
+        <item name="android:statusBarColor">#0A0D14</item>
+        <item name="android:navigationBarColor">#0A0D14</item>
     </style>
 </resources>
