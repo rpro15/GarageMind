@@ -90,6 +90,16 @@ def main():
     else:
         logger.info("BOT_TOKEN not set — bot disabled (ok for local dev)")
 
+    # Фоновый сборщик знаний (каждый час, не мешает работе)
+    collector = AutoCollector()
+    collector_thread = threading.Thread(
+        target=lambda: asyncio.run(collector.run_daemon(interval_minutes=60)),
+        daemon=True,
+        name="auto_collector",
+    )
+    collector_thread.start()
+    logger.info("🧠 AutoCollector started (hourly)")
+
     port = int(os.environ.get("PORT", 8000))
     logger.info("Starting Flask server on 0.0.0.0:%s", port)
     app.run(host='0.0.0.0', port=port, debug=False)
