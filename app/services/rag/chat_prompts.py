@@ -4,6 +4,14 @@ AI сам решает, когда что уточнять, на основе о
 """
 import logging
 from typing import Optional
+from app.services.rag.knowledge_base import KnowledgeBase
+
+# Экземпляр базы знаний (ленивая загрузка)
+_kb = KnowledgeBase()
+from app.services.rag.knowledge_base import KnowledgeBase
+
+# Экземпляр базы знаний (ленивая загрузка)
+_kb = KnowledgeBase()
 from app.domain.models import TireRequest, TirePreferences, UserLocation
 
 logger = logging.getLogger(__name__)
@@ -65,7 +73,7 @@ def should_ask_delivery(request: TireRequest) -> bool:
 
 
 def build_summary(request: TireRequest) -> str:
-    """Сформировать сводку перед запуском подбора."""
+    """Сформировать сводку перед запуском подбора, обогащённую базой знаний."""
     lines = [
         "📋 **Сводка заказа**",
         f"🚗 Авто: {request.brand} {request.model} ({request.year})",
@@ -82,5 +90,17 @@ def build_summary(request: TireRequest) -> str:
     if request.budget:
         lines.append(f"💰 Бюджет: до {request.budget} ₽")
     lines.append(f"📦 Доставка: {request.preferences.delivery_speed.value}")
+    
+    # Данные из базы знаний
+    kb_data = _kb.enhance_prompt(
+        brand=request.brand,
+        model=request.model,
+        year=request.year,
+        tire_size=request.preferences.size_str(),
+    )
+    if kb_data:
+        lines.append(f"\n📚 **Из базы знаний**")
+        lines.append(kb_data)
+    
     lines.append(f"\n✅ Запускаю подбор...")
     return "\n".join(lines)
