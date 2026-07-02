@@ -4,6 +4,9 @@ from app.domain.models import TireRequest, RecommendationResult, Product
 from app.ports.llm_client import LLMClient
 from app.ports.product_catalog import ProductCatalog
 from app.services.rag import Retriever
+from app.services.sources import MultiSourceProductService
+from app.services.sources.wildberries_source import WildberriesSource
+from app.services.sources.partner_source import PartnerSource
 
 
 class TireRecommendationService:
@@ -16,6 +19,13 @@ class TireRecommendationService:
         self.llm = llm_client
         self.catalog = catalog
         self.retriever = retriever
+        self._multi_source = self._setup_sources()
+
+    def _setup_sources(self) -> MultiSourceProductService:
+        ms = MultiSourceProductService()
+        ms.register_source(WildberriesSource())
+        ms.register_source(PartnerSource())
+        return ms
 
     async def get_recommendation(self, request: TireRequest) -> RecommendationResult:
         prompt = self._build_prompt(request)
@@ -23,8 +33,10 @@ class TireRecommendationService:
         # 1. Генерируем совет AI
         advice = await self.llm.generate_text(prompt, system_prompt=self._system_prompt())
 
-        # 2. Получаем товары из каталога
-        products = await self.catalog.find_tires(request)
+        # 2. Получаем товары из МНОЖЕСТВЕННЫХ источников
+        products = await self._multi_source.find_tires(request, min_products=5)
+        if not products:
+            products = await self.catalog.find_tires(request)
 
         # 3. Если есть RAG — обогащаем результат семантическим поиском
         if self.retriever and products:
