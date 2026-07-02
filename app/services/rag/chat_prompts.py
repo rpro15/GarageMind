@@ -4,10 +4,10 @@ AI сам решает, когда что уточнять, на основе о
 """
 import logging
 from typing import Optional
-from app.services.rag.knowledge_base import KnowledgeBase
+from app.services.database import DatabaseService
 
-# Экземпляр базы знаний (ленивая загрузка)
-_kb = KnowledgeBase()
+# Подключение к SQLite базе знаний
+_db = DatabaseService()
 from app.services.rag.knowledge_base import KnowledgeBase
 
 # Экземпляр базы знаний (ленивая загрузка)
@@ -91,12 +91,11 @@ def build_summary(request: TireRequest) -> str:
         lines.append(f"💰 Бюджет: до {request.budget} ₽")
     lines.append(f"📦 Доставка: {request.preferences.delivery_speed.value}")
     
-    # Данные из базы знаний
-    kb_data = _kb.enhance_prompt(
+    # Данные из SQLite базы знаний
+    kb_data = _db.enhance_prompt(
         brand=request.brand,
         model=request.model,
         year=request.year,
-        tire_size=request.preferences.size_str(),
     )
     if kb_data:
         lines.append(f"\n📚 **Из базы знаний**")
