@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from flask import Blueprint, current_app, jsonify, request
@@ -11,6 +12,8 @@ from app.domain.models import TireRequest, DrivingStyle, Season
 from app.services.part_recognition import PartRecognitionService
 from app.services.tire_recomendation import TireRecommendationService
 from app.services.vin_decoder import VinDecoderService
+from app.services.cache import get_cache
+from app.config.settings import settings
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +37,16 @@ def _vin_service() -> VinDecoderService:
 
 def _tire_service() -> TireRecommendationService:
     return current_app.extensions["services"]["tire_recommendation"]
+
+
+def _cache():
+    """Получить сервис кэша."""
+    return get_cache()
+
+
+def _run_async(coro):
+    """Запустить асинхронную корутину в синхронном контексте Flask."""
+    return asyncio.run(coro)
 
 
 # ──────────────────────────────────────────────
@@ -120,11 +133,11 @@ def recommend_tires():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Missing JSON body"}), 400
-    
+
     required = ['brand', 'model', 'year', 'driving_style']
     if not all(k in data for k in required):
         return jsonify({"error": f"Missing fields: {required}"}), 400
-    
+
     try:
         tire_request = TireRequest(
             brand=data['brand'],
@@ -136,55 +149,134 @@ def recommend_tires():
         )
     except (ValueError, KeyError) as e:
         return jsonify({"error": f"Invalid parameter: {str(e)}"}), 400
-    
-    import asyncio
-    try:
-        result = asyncio.run(_tire_service().get_recommendation(tire_request))
-    except Exception:
-        logger.exception("Recommendation failed")
+
+    async def _get_recommendation():
+        # Проверяем кэш
+        cache = _cache()
+        cache_key = f"recommend:{data['brand']}:{data['model']}:{data['year']}:{data['driving_style']}"
+        cached = await cache.get_json(cache_key)
+        if cached:
+            logger.info("Cache HIT for recommend_tires: %s", cache_key)
+            return cached
+
+        try:
+            result = await _tire_service().get_recommendation(tire_request)
+        except Exception:
+            logger.exception("Recommendation failed")
+            return None
+
+        response = {
+            "advice": result.advice,
+            "products": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "price": p.price,
+                    "currency": p.currency,
+                    "image_url": p.image_url,
+                    "partner_link": p.partner_link,
+                    "source": p.source,
+                } for p in result.products
+            ],
+            "request": {
+                "brand": result.request.brand,
+                "model": result.request.model,
+                "year": result.request.year,
+                "driving_style": result.request.driving_style.value,
+                "budget": result.request.budget,
+                "season": result.request.season.value if result.request.season else None,
+            },
+        }
+
+        # Сохраняем в кэш на 10 минут
+        await cache.set_json(cache_key, response, ttl=settings.CACHE_TTL_RECOMMEND)
+
+        return response
+
+    response = _run_async(_get_recommendation())
+
+    if response is None:
         return jsonify({"error": "Internal server error"}), 500
-    
-    response = {
-        "advice": result.advice,
-        "products": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "price": p.price,
-                "currency": p.currency,
-                "image_url": p.image_url,
-                "partner_link": p.partner_link,
-                "source": p.source,
-            } for p in result.products
-        ],
-        "request": {
-            "brand": result.request.brand,
-            "model": result.request.model,
-            "year": result.request.year,
-            "driving_style": result.request.driving_style.value,
-            "budget": result.request.budget,
-            "season": result.request.season.value if result.request.season else None,
-        },
-    }
+
     return jsonify(response), 200
 
 
+# ──────────────────────────────────────────────
+#  Brands & Models (с кэшированием)
+# ──────────────────────────────────────────────
+
 @api_blueprint.route('/brands', methods=['GET'])
 def get_brands():
-    """Возвращает список популярных марок."""
+    """Возвращает список популярных марок с кэшированием."""
+    cache = _cache()
+    cache_key = "brands:list"
+
+    # Пробуем из кэша (синхронная обёртка)
+    async def _get_cached():
+        return await cache.get_json(cache_key)
+
+    cached = _run_async(_get_cached())
+    if cached:
+        return jsonify(cached), 200
+
     brands = [
-        "Lada", "Kia", "Hyundai", "Toyota", "Volkswagen", 
+        "Lada", "Kia", "Hyundai", "Toyota", "Volkswagen",
         "Skoda", "Nissan", "Mitsubishi", "BMW", "Mercedes-Benz",
         "Audi", "Ford", "Renault", "Chevrolet", "Mazda",
     ]
-    return jsonify(sorted(brands)), 200
+    brands_sorted = sorted(brands)
 
+    # Кэшируем на 1 час
+    async def _set_cache():
+        await cache.set_json(cache_key, brands_sorted, ttl=settings.CACHE_TTL_BRANDS)
+
+    _run_async(_set_cache())
+
+    return jsonify(brands_sorted), 200
+
+
+@api_blueprint.route('/models', methods=['GET'])
+def get_models():
+    """Возвращает модели для выбранной марки (с кэшированием)."""
+    brand = request.args.get('brand')
+    if not brand:
+        return jsonify({"error": "Missing brand parameter"}), 400
+
+    cache = _cache()
+    cache_key = f"models:{brand.lower()}"
+
+    async def _get_cached():
+        return await cache.get_json(cache_key)
+
+    cached = _run_async(_get_cached())
+    if cached:
+        return jsonify(cached), 200
+
+    mock_models = {
+        "Toyota": ["Camry", "Corolla", "RAV4", "Land Cruiser", "Yaris"],
+        "Kia": ["Rio", "Sportage", "Cerato", "Stinger", "Soul"],
+        "Hyundai": ["Solaris", "Creta", "Tucson", "Elantra", "Santa Fe"],
+        "Lada": ["Granta", "Vesta", "Niva", "Kalina", "Priora"],
+        "Volkswagen": ["Polo", "Golf", "Passat", "Tiguan", "Jetta"],
+    }
+    models = mock_models.get(brand, [])
+
+    async def _set_cache():
+        await cache.set_json(cache_key, models, ttl=settings.CACHE_TTL_MODELS)
+
+    _run_async(_set_cache())
+
+    return jsonify(models), 200
+
+
+# ──────────────────────────────────────────────
+#  Lang files
+# ──────────────────────────────────────────────
 
 @api_blueprint.route('/lang/<lang_code>', methods=['GET'])
 def get_lang(lang_code):
     """Возвращает JSON-файл локализации."""
     import json, os
-    # __file__ = app/api/routes.py -> поднимаемся до корня проекта
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     lang_path = os.path.join(base, 'miniapp', 'static', 'lang', f'{lang_code}.json')
     if not os.path.exists(lang_path):
@@ -195,20 +287,3 @@ def get_lang(lang_code):
         return jsonify(data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@api_blueprint.route('/models', methods=['GET'])
-def get_models():
-    """Возвращает модели для выбранной марки (заглушка)."""
-    brand = request.args.get('brand')
-    if not brand:
-        return jsonify({"error": "Missing brand parameter"}), 400
-    mock_models = {
-        "Toyota": ["Camry", "Corolla", "RAV4", "Land Cruiser", "Yaris"],
-        "Kia": ["Rio", "Sportage", "Cerato", "Stinger", "Soul"],
-        "Hyundai": ["Solaris", "Creta", "Tucson", "Elantra", "Santa Fe"],
-        "Lada": ["Granta", "Vesta", "Niva", "Kalina", "Priora"],
-        "Volkswagen": ["Polo", "Golf", "Passat", "Tiguan", "Jetta"],
-    }
-    models = mock_models.get(brand, [])
-    return jsonify(models), 200

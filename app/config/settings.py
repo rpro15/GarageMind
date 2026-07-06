@@ -24,6 +24,18 @@ class Settings:
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+    # Кэш
+    CACHE_TTL_BRANDS = int(os.getenv("CACHE_TTL_BRANDS", "3600"))           # 1 час
+    CACHE_TTL_MODELS = int(os.getenv("CACHE_TTL_MODELS", "3600"))           # 1 час
+    CACHE_TTL_RECOMMEND = int(os.getenv("CACHE_TTL_RECOMMEND", "600"))      # 10 минут
+    CACHE_TTL_API_RESPONSE = int(os.getenv("CACHE_TTL_API_RESPONSE", "300"))  # 5 минут
+
+    # Автосборщик знаний
+    AUTO_COLLECTOR_INTERVAL_MINUTES = int(os.getenv("AUTO_COLLECTOR_INTERVAL_MINUTES", "60"))
+    AUTO_COLLECTOR_REVIEWS_PER_CYCLE = int(os.getenv("AUTO_COLLECTOR_REVIEWS_PER_CYCLE", "10"))
+    COLLECTOR_DAILY_LIMIT = int(os.getenv("COLLECTOR_DAILY_LIMIT", "100"))
+
     MINIAPP_URL = os.getenv("MINIAPP_URL", "http://localhost:8000/miniapp/")
 
 

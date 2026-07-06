@@ -14,6 +14,8 @@ from app.services.vin_decoder import VinDecoderService
 from app.adapters.deepseek_client import DeepSeekClient
 from app.adapters.partner_api import MockPartnerCatalog
 from app.services.tire_recomendation import TireRecommendationService
+from app.services.knowledge.auto_collector import AutoCollector
+from app.services.cache import get_cache
 from app.monitoring.metrics import setup_monitoring
 
 # Структурированное логирование
@@ -36,7 +38,10 @@ try:
 except ImportError:
     pass
 
-logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+logging.basicConfig(
+    level=settings.LOG_LEVEL,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
@@ -66,10 +71,15 @@ def create_app() -> Flask:
     catalog = MockPartnerCatalog()
     tire_service = TireRecommendationService(llm_client, catalog)
 
+    # Инициализация кэша (Redis)
+    cache = get_cache()
+    logger.info("🧠 Cache service initialized (Redis: %s)", "available" if cache._available else "not available (fallback to no-cache)")
+
     app.extensions["services"] = {
         "part_recognition": part_service,
         "vin_decoder": vin_service,
         "tire_recommendation": tire_service,
+        "cache": cache,
     }
 
     return app
@@ -79,29 +89,30 @@ def main():
     app = create_app()
 
     # Бота запускаем только если есть токен
-    # И aiogram 3+ должен работать в главном потоке, поэтому
-    # для локальной разработки просто пропускаем
     if settings.BOT_TOKEN:
-        try:
-            logger.info("BOT_TOKEN is set but aiogram polling is disabled in dev mode")
-            logger.info("Run bot separately if needed: python -m app.bot.dispatcher")
-        except Exception as e:
-            logger.warning("Bot startup skipped: %s", e)
+        logger.info("BOT_TOKEN is set — bot can be started separately")
+        logger.info("Run: python -m app.bot.dispatcher")
     else:
         logger.info("BOT_TOKEN not set — bot disabled (ok for local dev)")
 
-    # Фоновый сборщик знаний (каждый час, не мешает работе)
+    # Фоновый сборщик знаний (каждый час, лимит 100 отзывов в день)
     collector = AutoCollector()
     collector_thread = threading.Thread(
-        target=lambda: asyncio.run(collector.run_daemon(interval_minutes=60)),
+        target=lambda: asyncio.run(
+            collector.run_daemon(interval_minutes=settings.AUTO_COLLECTOR_INTERVAL_MINUTES)
+        ),
         daemon=True,
         name="auto_collector",
     )
     collector_thread.start()
-    logger.info("🧠 AutoCollector started (hourly)")
+    logger.info(
+        "🧠 AutoCollector started (interval=%d min, daily_limit=%d)",
+        settings.AUTO_COLLECTOR_INTERVAL_MINUTES,
+        settings.COLLECTOR_DAILY_LIMIT,
+    )
 
     port = int(os.environ.get("PORT", 8000))
-    logger.info("Starting Flask server on 0.0.0.0:%s", port)
+    logger.info("🚀 Starting Flask server on 0.0.0.0:%s", port)
     app.run(host='0.0.0.0', port=port, debug=False)
 
 

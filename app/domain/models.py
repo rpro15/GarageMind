@@ -200,3 +200,27 @@ class RecommendationResult:
     request: TireRequest
     popular_pick: Optional[Product] = None
     warnings: List[str] = field(default_factory=list)  # "шины дороже бюджета", "доставка 5 дней"
+
+
+# ============================================================
+# VIN Decoder models
+# ============================================================
+
+@dataclass
+class VinDecoded:
+    """Расшифрованный VIN-номер."""
+    wmi: Optional[str] = None                  # World Manufacturer Identifier
+    region: Optional[str] = None               # Регион производства
+    manufacturer: Optional[str] = None          # Производитель
+    model_year: Optional[int] = None            # Год выпуска
+    plant_code: Optional[str] = None            # Код завода
+    serial: Optional[str] = None                # Серийный номер
+
+
+@dataclass
+class VinDecodeResult:
+    """Результат декодирования VIN."""
+    vin: str
+    is_valid: bool
+    validation_errors: List[str]
+    decoded: VinDecoded
