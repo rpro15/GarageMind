@@ -1,0 +1,51 @@
+# ============================================================
+# Prometheus — конфигурация сбора метрик
+# ============================================================
+
+global:
+  scrape_interval: 15s      # Как часто собирать метрики
+  evaluation_interval: 15s  # Как часто проверять правила
+  scrape_timeout: 10s
+
+# Правила алертов
+rule_files:
+  - "alerts.yml"
+
+# Откуда собирать метрики
+scrape_configs:
+  # 1. Flask приложение
+  - job_name: 'garage-mind-api'
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          service: 'garage-mind'
+          tier: 'api'
+
+  # 2. Redis
+  - job_name: 'redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'garage-mind'
+          tier: 'cache'
+
+  # 3. Node (системные метрики: CPU, RAM, диск)
+  - job_name: 'node'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'garage-mind'
+          tier: 'system'
+
+  # 4. Docker (контейнеры)
+  - job_name: 'docker'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['docker:9323']
+        labels:
+          service: 'garage-mind'
+          tier: 'docker'

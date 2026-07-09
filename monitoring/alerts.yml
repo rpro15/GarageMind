@@ -1,0 +1,55 @@
+# ============================================================
+# Prometheus — правила алертов
+# ============================================================
+
+groups:
+  - name: garage-mind
+    interval: 30s
+    rules:
+      # API недоступен
+      - alert: API_Down
+        expr: up{job="garage-mind-api"} == 0
+        for: 1m
+        annotations:
+          summary: "API GarageMind недоступен"
+          description: "API не отвечает больше 1 минуты"
+
+      # Высокая задержка DeepSeek
+      - alert: HighDeepSeekLatency
+        expr: deepseek_api_latency_seconds > 5
+        for: 2m
+        annotations:
+          summary: "DeepSeek API тормозит"
+          description: "Задержка DeepSeek > 5 секунд"
+
+      # Много ошибок
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "Много 5xx ошибок"
+          description: "Более 5% запросов заканчиваются ошибкой"
+
+      # Кэш плохо работает
+      - alert: LowCacheHitRate
+        expr: redis_cache_hit_ratio < 0.5
+        for: 10m
+        annotations:
+          summary: "Низкий процент попаданий в кэш"
+          description: "Cache hit ratio < 50%"
+
+      # Высокая нагрузка CPU
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        annotations:
+          summary: "Высокая загрузка CPU"
+          description: "CPU > 80% в течение 5 минут"
+
+      # Мало места на диске
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        annotations:
+          summary: "Мало места на диске"
+          description: "Менее 10% свободного места"

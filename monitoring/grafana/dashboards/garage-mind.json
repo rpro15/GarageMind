@@ -1,0 +1,104 @@
+{
+  "title": "GarageMind AI — Дашборд",
+  "description": "Мониторинг производительности и здоровья",
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Healthcheck",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "up{job=\"garage-mind-api\"}",
+          "legendFormat": "API"
+        }
+      ],
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0}
+    },
+    {
+      "title": "RPS (запросов/сек)",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "RPS"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4}
+    },
+    {
+      "title": "Задержка API (p95)",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4}
+    },
+    {
+      "title": "Cache Hit Ratio",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "redis_cache_hit_ratio",
+          "legendFormat": "Hit ratio"
+        }
+      ],
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0}
+    },
+    {
+      "title": "DeepSeek API Latency",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "deepseek_api_latency_seconds",
+          "legendFormat": "Latency"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 4}
+    },
+    {
+      "title": "CPU Usage",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "CPU %"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12}
+    },
+    {
+      "title": "Memory Usage %",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100",
+          "legendFormat": "RAM %"
+        }
+      ],
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0}
+    },
+    {
+      "title": "Количество 5xx ошибок",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+          "legendFormat": "5xx/s"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12}
+    }
+  ],
+  "schemaVersion": 30
+}
