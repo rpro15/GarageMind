@@ -3,7 +3,7 @@ import asyncio
 import logging
 import threading
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -55,11 +55,11 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     # Flask со статикой для Mini App
-    app = Flask(__name__,
-                static_folder="miniapp/static",
-                static_url_path="/miniapp")
+    app = Flask(__name__)
     app.config['SECRET_KEY'] = settings.SECRET_KEY
     CORS(app)
+
+    MINIAPP_STATIC = os.path.join(app.root_path, 'miniapp', 'static')
 
     # Rate Limiting (memory by default, Redis если доступен)
     try:
@@ -90,6 +90,15 @@ def create_app() -> Flask:
     @app.route('/health', methods=['GET'])
     def health():
         return jsonify({"status": "ok", "service": "avto-expert-ai"}), 200
+
+    # Mini App: отдаём index.html по /miniapp/
+    @app.route('/miniapp/')
+    @app.route('/miniapp/<path:filename>')
+    def miniapp_static(filename='index.html'):
+        return send_from_directory(
+            os.path.join(app.root_path, 'miniapp', 'static'),
+            filename
+        )
 
     # Регистрация blueprint'ов
     app.register_blueprint(api_blueprint)
