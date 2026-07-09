@@ -41,7 +41,7 @@ class UserProfile:
     purchased_tires: List[str] = field(default_factory=list)
 
     # Последние запросы
-    recent_queries: List[dict] = field(default_factory=list, maxlen=10)
+    recent_queries: List[dict] = field(default_factory=list)
 
 
 class UserHistoryService:
