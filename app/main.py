@@ -21,6 +21,10 @@ from app.services.knowledge.auto_collector import AutoCollector
 from app.services.cache import get_cache
 from app.services.user_history import run_migration as run_user_history_migration
 from app.monitoring.metrics import setup_monitoring
+from app.api.admitad import admitad_blueprint
+from app.services.sources import MultiSourceProductService
+from app.services.sources.wildberries_source import WildberriesSource
+from app.services.sources.partner_source import PartnerSource
 
 # Структурированное логирование
 try:
@@ -87,14 +91,27 @@ def create_app() -> Flask:
     def health():
         return jsonify({"status": "ok", "service": "avto-expert-ai"}), 200
 
+    # Регистрация blueprint'ов
     app.register_blueprint(api_blueprint)
+    app.register_blueprint(admitad_blueprint)
     register_error_handlers(app)
 
     # Инициализация сервисов
     part_service = build_part_recognition_service(settings, logger)
     vin_service = VinDecoderService(logger)
     llm_client = DeepSeekClient()
-    catalog = MockPartnerCatalog()
+
+    # MultiSourceProductService — реальный поиск по всем источникам
+    catalog = MultiSourceProductService()
+    catalog.register_source(PartnerSource(
+        client_id=settings.ADMITAD_CLIENT_ID or None,
+        client_secret=settings.ADMITAD_CLIENT_SECRET or None,
+    ))
+    catalog.register_source(WildberriesSource(
+        api_key=settings.WILDBERRIES_API_KEY or None,
+    ))
+    logger.info("🏪 MultiSourceProductService: Admitad + Wildberries + fallback")
+
     tire_service = TireRecommendationService(llm_client, catalog)
 
     # Инициализация кэша (Redis)
