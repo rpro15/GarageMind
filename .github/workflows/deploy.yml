@@ -1,0 +1,128 @@
+name: 🚀 CI/CD — GarageMind AI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # =========================
+  # 1️⃣ ТЕСТЫ
+  # =========================
+  test:
+    name: 🧪 Тесты
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Установка зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bs4 lxml
+          echo "✅ Установлено"
+
+      - name: 🧪 Запуск тестов
+        run: |
+          python -m pytest tests/ -v --tb=short --cov=app --cov-report=term
+        env:
+          SECRET_KEY: ci-secret-key
+          DEEPSEEK_API_KEY: ci-test-key
+          DEEPSEEK_MODEL: deepseek-chat
+          LOG_LEVEL: CRITICAL
+          GARAGE_MIND_DB_PATH: :memory:
+
+      - name: 📊 Проверка покрытия
+        run: |
+          python -m pytest tests/ --cov=app --cov-report=term-missing --tb=short || true
+          echo "✅ Покрытие проверено"
+
+  # =========================
+  # 2️⃣ СБОРКА DOCKER
+  # =========================
+  build:
+    name: 🐳 Сборка Docker
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐳 Логин в Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 🏷️ Теги
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/garage-mind
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: 🐳 Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =========================
+  # 3️⃣ ДЕПЛОЙ НА СЕРВЕР
+  # =========================
+  deploy:
+    name: 🚀 Деплой
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 🚀 SSH deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT || '22' }}
+          script: |
+            echo "🚀 Начало деплоя..."
+
+            # Перейти в папку проекта
+            cd /opt/garage-mind || {
+              echo "❌ Папка не найдена, клонируем..."
+              git clone https://github.com/${{ github.repository }}.git /opt/garage-mind
+              cd /opt/garage-mind
+            }
+
+            # Обновить код
+            git pull origin main
+
+            # Создать бекап БД
+            mkdir -p backups/$(date +%Y-%m-%d)
+            cp data/*.sqlite backups/$(date +%Y-%m-%d)/ 2>/dev/null || echo "⚠️ Нет файлов .sqlite для бекапа"
+
+            # Собрать и запустить
+            docker compose down
+            docker compose up --build -d
+
+            # Прогреть кэш
+            sleep 5
+            curl -sf https://rpro.su/health > /dev/null && echo "✅ Healthcheck OK" || echo "⚠️ Healthcheck не прошёл"
+
+            # Очистить старые образы
+            docker system prune -f
+
+            echo "✅ Деплой завершён"

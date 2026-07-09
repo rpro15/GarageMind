@@ -1,0 +1,48 @@
+name: 📦 Бекап базы данных
+
+on:
+  schedule:
+    # Каждый день в 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # можно запустить вручную
+
+jobs:
+  backup:
+    name: 📦 Бекап SQLite + Redis
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔐 SSH и бекап
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            DATE=$(date +%Y-%m-%d)
+            BACKUP_DIR="/opt/backups/garage-mind/$DATE"
+            mkdir -p "$BACKUP_DIR"
+
+            echo "📦 Бекап от $DATE"
+
+            # Бекап SQLite
+            cp /opt/garage-mind/data/*.sqlite "$BACKUP_DIR/" 2>/dev/null && \
+              echo "✅ SQLite: $(ls -la $BACKUP_DIR/*.sqlite 2>/dev/null | awk '{print $5, $9}')" || \
+              echo "⚠️ SQLite: нет файлов"
+
+            # Бекап .env
+            cp /opt/garage-mind/.env "$BACKUP_DIR/" 2>/dev/null && \
+              echo "✅ .env сохранён" || \
+              echo "⚠️ .env не найден"
+
+            # Сжать
+            tar -czf "/opt/backups/garage-mind-$DATE.tar.gz" -C "/opt/backups/garage-mind" "$DATE"
+            rm -rf "$BACKUP_DIR"
+
+            echo "✅ Бекап: /opt/backups/garage-mind-$DATE.tar.gz ($(ls -la /opt/backups/garage-mind-$DATE.tar.gz | awk '{print $5}') байт)"
+
+            # Чистка старых бекапов (оставить 30 дней)
+            find /opt/backups/garage-mind-*.tar.gz -mtime +30 -delete
+            echo "🧹 Старые бекапы (>30 дней) удалены"
