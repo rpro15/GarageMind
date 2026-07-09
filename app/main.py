@@ -16,6 +16,7 @@ from app.adapters.partner_api import MockPartnerCatalog
 from app.services.tire_recomendation import TireRecommendationService
 from app.services.knowledge.auto_collector import AutoCollector
 from app.services.cache import get_cache
+from app.services.user_history import run_migration as run_user_history_migration
 from app.monitoring.metrics import setup_monitoring
 
 # Структурированное логирование
@@ -74,6 +75,13 @@ def create_app() -> Flask:
     # Инициализация кэша (Redis)
     cache = get_cache()
     logger.info("🧠 Cache service initialized (Redis: %s)", "available" if cache._available else "not available (fallback to no-cache)")
+
+    # Миграция таблиц персонализации
+    try:
+        run_user_history_migration()
+        logger.info("✅ User history migration completed")
+    except Exception as e:
+        logger.warning("User history migration failed: %s", e)
 
     app.extensions["services"] = {
         "part_recognition": part_service,

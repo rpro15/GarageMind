@@ -1,0 +1,52 @@
+{
+  "name": "GarageMind AI — подбор шин",
+  "short_name": "GarageMind",
+  "description": "Умный AI-консультант по подбору шин. Подбор по марке авто, стилю вождения, сезону и бюджету.",
+  "start_url": "/miniapp/index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0f",
+  "theme_color": "#00d4ff",
+  "scope": "/miniapp/",
+  "icons": [
+    {
+      "src": "/miniapp/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/miniapp/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/miniapp/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["automotive", "shopping", "utilities"],
+  "lang": "ru-RU",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "screenshots": [
+    {
+      "src": "/miniapp/static/screenshots/chat.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Чат с AI-консультантом"
+    },
+    {
+      "src": "/miniapp/static/screenshots/form.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Форма быстрого подбора"
+    }
+  ]
+}

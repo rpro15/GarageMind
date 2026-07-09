@@ -13,6 +13,8 @@ from app.services.part_recognition import PartRecognitionService
 from app.services.tire_recomendation import TireRecommendationService
 from app.services.vin_decoder import VinDecoderService
 from app.services.cache import get_cache
+from app.services.product_comparison import ProductComparisonService
+from app.services.user_history import UserHistoryService, run_migration
 from app.config.settings import settings
 
 
@@ -37,6 +39,22 @@ def _vin_service() -> VinDecoderService:
 
 def _tire_service() -> TireRecommendationService:
     return current_app.extensions["services"]["tire_recommendation"]
+
+
+def _comparison_service() -> ProductComparisonService:
+    """Получить сервис сравнения товаров."""
+    if "product_comparison" not in current_app.extensions.get("services", {}):
+        llm = current_app.extensions["services"].get("llm_client")
+        if llm:
+            current_app.extensions["services"]["product_comparison"] = ProductComparisonService(llm)
+    return current_app.extensions["services"]["product_comparison"]
+
+
+def _user_history_service() -> UserHistoryService:
+    """Получить сервис истории пользователя."""
+    if "user_history" not in current_app.extensions.get("services", {}):
+        current_app.extensions["services"]["user_history"] = UserHistoryService()
+    return current_app.extensions["services"]["user_history"]
 
 
 def _cache():
@@ -150,17 +168,29 @@ def recommend_tires():
     except (ValueError, KeyError) as e:
         return jsonify({"error": f"Invalid parameter: {str(e)}"}), 400
 
+    user_id = data.get("user_id")
+
     async def _get_recommendation():
-        # Проверяем кэш
+        # Проверяем кэш (без учёта user_id — общий кэш)
         cache = _cache()
         cache_key = f"recommend:{data['brand']}:{data['model']}:{data['year']}:{data['driving_style']}"
         cached = await cache.get_json(cache_key)
-        if cached:
+        if cached and not user_id:
             logger.info("Cache HIT for recommend_tires: %s", cache_key)
             return cached
 
+        # Если есть user_id — добавляем историю в запрос к AI
+        history_prompt = ""
+        if user_id:
+            try:
+                history_prompt = await _user_history_service().build_history_prompt(user_id)
+                if history_prompt:
+                    logger.info("История пользователя %s добавлена к промпту", user_id)
+            except Exception:
+                logger.debug("Не удалось загрузить историю для %s", user_id)
+
         try:
-            result = await _tire_service().get_recommendation(tire_request)
+            result = await _tire_service().get_recommendation(tire_request, history_prompt)
         except Exception:
             logger.exception("Recommendation failed")
             return None
@@ -189,7 +219,22 @@ def recommend_tires():
         }
 
         # Сохраняем в кэш на 10 минут
-        await cache.set_json(cache_key, response, ttl=settings.CACHE_TTL_RECOMMEND)
+        if not user_id:
+            await cache.set_json(cache_key, response, ttl=settings.CACHE_TTL_RECOMMEND)
+
+        # Сохраняем запрос в историю пользователя
+        if user_id:
+            try:
+                await _user_history_service().update_query(
+                    user_id=user_id,
+                    brand=data['brand'],
+                    model=data['model'],
+                    driving_style=data['driving_style'],
+                    season=data.get('season'),
+                    budget=data.get('budget'),
+                )
+            except Exception:
+                logger.debug("Не удалось сохранить историю для %s", user_id)
 
         return response
 
@@ -267,6 +312,129 @@ def get_models():
     _run_async(_set_cache())
 
     return jsonify(models), 200
+
+
+# ──────────────────────────────────────────────
+#  Compare tires
+# ──────────────────────────────────────────────
+
+@api_blueprint.route('/compare_tires', methods=['POST'])
+def compare_tires():
+    """Сравнение 2–4 товаров. Возвращает таблицу сравнения + рекомендацию AI."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    products_data = data.get("products", [])
+    if len(products_data) < 2:
+        return jsonify({"error": "Need at least 2 products to compare"}), 400
+    if len(products_data) > 4:
+        return jsonify({"error": "Maximum 4 products for comparison"}), 400
+
+    # Преобразуем в Product
+    from app.domain.models import Product as ProductModel
+    products = []
+    for p in products_data:
+        products.append(ProductModel(
+            id=p.get("id", ""),
+            name=p.get("name", "Unknown"),
+            price=float(p.get("price", 0)),
+            currency=p.get("currency", "₽"),
+            rating=float(p.get("rating", 0)) if p.get("rating") else None,
+            image_url=p.get("image_url", ""),
+            partner_link=p.get("partner_link", ""),
+            source=p.get("source", ""),
+        ))
+
+    async def _get_comparison():
+        try:
+            result = await _comparison_service().compare(products)
+            return {
+                "products": [
+                    {
+                        "name": item.name,
+                        "price": item.price,
+                        "rating": item.rating,
+                        "pros": item.pros,
+                        "cons": item.cons,
+                        "best_for": item.best_for,
+                    }
+                    for item in result.products
+                ],
+                "summary": result.summary,
+                "advice": result.raw_advice,
+            }
+        except ValueError as e:
+            return {"error": str(e)}
+        except Exception as e:
+            logger.exception("Comparison failed")
+            return {"error": "Internal server error"}
+
+    response = _run_async(_get_comparison())
+    status = 200 if "error" not in response or not response.get("products") else 400
+    return jsonify(response), status
+
+
+# ──────────────────────────────────────────────
+#  User history (персонализация)
+# ──────────────────────────────────────────────
+
+@api_blueprint.route('/user/history', methods=['POST'])
+def user_history():
+    """Сохранить / получить историю пользователя."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    async def _handle_history():
+        service = _user_history_service()
+
+        # Если это запрос истории
+        if data.get("action") == "get":
+            prompt_part = await service.build_history_prompt(user_id)
+            profile = await service.get_profile(user_id)
+            return {
+                "history_prompt": prompt_part,
+                "profile": {
+                    "total_queries": profile.total_queries,
+                    "preferred_brand": profile.preferred_brand,
+                    "preferred_model": profile.preferred_model,
+                    "preferred_driving_style": profile.preferred_driving_style,
+                    "preferred_season": profile.preferred_season,
+                    "preferred_budget": profile.preferred_budget,
+                    "purchased_tires": profile.purchased_tires,
+                },
+            }
+
+        # Если это запись нового запроса
+        elif data.get("action") == "save_query":
+            await service.update_query(
+                user_id=user_id,
+                brand=data.get("brand", ""),
+                model=data.get("model", ""),
+                driving_style=data.get("driving_style", "comfort"),
+                season=data.get("season"),
+                budget=data.get("budget"),
+            )
+            return {"status": "ok", "message": "History updated"}
+
+        # Если это запись покупки
+        elif data.get("action") == "save_purchase":
+            tire_name = data.get("tire_name")
+            if tire_name:
+                await service.add_purchase(user_id, tire_name)
+                return {"status": "ok", "message": f"Purchase saved: {tire_name}"}
+            return {"error": "Missing tire_name"}, 400
+
+        return {"error": "Unknown action"}, 400
+
+    response = _run_async(_handle_history())
+    status = 200 if "error" not in response else 400
+    return jsonify(response), status
 
 
 # ──────────────────────────────────────────────
