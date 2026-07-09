@@ -5,6 +5,9 @@ import threading
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from limits.storage import MemoryStorage, RedisStorage
 
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
@@ -53,6 +56,28 @@ def create_app() -> Flask:
                 static_url_path="/miniapp")
     app.config['SECRET_KEY'] = settings.SECRET_KEY
     CORS(app)
+
+    # Rate Limiting (memory by default, Redis если доступен)
+    try:
+        if settings.REDIS_URL and 'redis' in settings.REDIS_URL:
+            import redis as redis_lib
+            r = redis_lib.from_url(settings.REDIS_URL)
+            r.ping()
+            storage = RedisStorage(settings.REDIS_URL)
+            logger.info("🚦 Rate limiter: Redis storage")
+        else:
+            storage = MemoryStorage()
+            logger.info("🚦 Rate limiter: memory storage")
+    except Exception:
+        storage = MemoryStorage()
+        logger.info("🚦 Rate limiter: memory storage (fallback)")
+
+    limiter = Limiter(
+        key_func=get_remote_address,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://",
+    )
+    limiter.init_app(app)
 
     # Настройка мониторинга (Prometheus метрики + request ID + structured logs)
     metrics = setup_monitoring(app)
