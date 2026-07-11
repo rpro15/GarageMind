@@ -43,7 +43,6 @@ const userData = {
     season: null,
     budget: null
 };
-let currentStep = 0;
 let isProcessing = false;
 let lastRecommendationData = null;
 
