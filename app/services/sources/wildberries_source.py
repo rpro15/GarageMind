@@ -20,7 +20,7 @@ class WildberriesSource(BaseSource):
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
-        self._client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+        self._client = httpx.AsyncClient(timeout=15.0, follow_redirects=True, trust_env=False)
 
     async def fetch(self, request: TireRequest) -> List[Product]:
         """Пробует API, если нет ключа — парсит."""

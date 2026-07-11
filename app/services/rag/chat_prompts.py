@@ -52,14 +52,15 @@ def should_ask_for_wheels(request: TireRequest, user_message: str) -> bool:
         if kw in msg:
             return True
     # Если шины уже выбраны и не упомянуты диски
-    if request and request.preferences.product_type.value == "tires":
+    if request and hasattr(request.preferences, 'product_type') and request.preferences.product_type:
         return True
     return False
 
 
 def should_ask_for_bolts(request: TireRequest) -> bool:
     """Нужно ли спросить про крепёж."""
-    return request.preferences.product_type in ("wheels", "assembly")
+    pt = getattr(request.preferences, 'product_type', None)
+    return pt in ("wheels", "assembly")
 
 
 def should_ask_region(request: TireRequest) -> bool:
@@ -82,8 +83,9 @@ def build_summary(request: TireRequest) -> str:
     ]
     if request.season:
         lines.append(f"🌤️ Сезон: {request.season.value}")
-    if request.preferences.product_type:
-        lines.append(f"🔧 Ищем: {request.preferences.product_type.value}")
+    pt = getattr(request.preferences, 'product_type', None)
+    if pt:
+        lines.append(f"🔧 Ищем: {pt}")
     size = request.preferences.size_str()
     if size:
         lines.append(f"📐 Размер: {size}")
@@ -92,7 +94,7 @@ def build_summary(request: TireRequest) -> str:
     lines.append(f"📦 Доставка: {request.preferences.delivery_speed.value}")
     
     # Данные из SQLite базы знаний
-    kb_data = _db.enhance_prompt(
+    kb_data = _kb.enhance_prompt(
         brand=request.brand,
         model=request.model,
         year=request.year,

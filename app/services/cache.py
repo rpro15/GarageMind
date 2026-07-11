@@ -77,7 +77,7 @@ class RedisCache:
         if not self._available or not self._client:
             return False
         try:
-            await self._client.setex(key, ttl, value)
+            await self._client.set(key, value, ex=ttl)
             return True
         except Exception as e:
             logger.warning("Redis set error: %s", e)

@@ -31,7 +31,7 @@ class PartnerSource(BaseSource):
         self.client_id = client_id
         self.client_secret = client_secret
         self.coupon_code = coupon_code
-        self._client = httpx.AsyncClient(timeout=15.0)
+        self._client = httpx.AsyncClient(timeout=15.0, trust_env=False)
         self._token: Optional[str] = None
 
     async def _get_token(self) -> Optional[str]:

@@ -28,7 +28,7 @@ class DeepSeekClient(LLMClient):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
