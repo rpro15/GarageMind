@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any, Optional, Callable
 from functools import wraps
 
@@ -23,8 +24,9 @@ from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Глобальный экземпляр кэша (singleton)
+# Глобальный экземпляр кэша (thread-safe singleton)
 _cache_instance = None
+_cache_lock = threading.Lock()
 
 
 class RedisCache:
@@ -132,10 +134,12 @@ class RedisCache:
 
 
 def get_cache() -> RedisCache:
-    """Получить глобальный экземпляр кэша (singleton)."""
+    """Получить глобальный экземпляр кэша (thread-safe singleton)."""
     global _cache_instance
     if _cache_instance is None:
-        _cache_instance = RedisCache(settings.REDIS_URL)
+        with _cache_lock:
+            if _cache_instance is None:
+                _cache_instance = RedisCache(settings.REDIS_URL)
     return _cache_instance
 
 

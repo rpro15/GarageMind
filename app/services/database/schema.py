@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-# Путь к БД: сначала переменная окружения, потом data/garage_mind.db
-_DEFAULT_DB = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "garage_mind.db")
+# Путь к БД: сначала переменная окружения, потом стандартный путь
+_DEFAULT_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "data", "garage_mind.db")
 DB_PATH = os.environ.get("GARAGE_MIND_DB_PATH", _DEFAULT_DB)
 
 
@@ -99,10 +99,16 @@ class DatabaseService:
 
     @contextmanager
     def _conn(self):
-        """Контекстный менеджер подключения к БД."""
+        """Контекстный менеджер подключения к БД (внутренний)."""
+        with self.get_conn() as conn:
+            yield conn
+
+    @contextmanager
+    def get_conn(self):
+        """Публичный контекстный менеджер подключения к БД."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")       # быстрая запись
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         try:
             yield conn

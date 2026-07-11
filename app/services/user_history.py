@@ -198,7 +198,7 @@ class UserHistoryService:
     def _load_from_db(self, user_id: str) -> Optional[UserProfile]:
         """Загрузить профиль из SQLite."""
         try:
-            with self.db._conn() as conn:
+            with self.db.get_conn() as conn:
                 row = conn.execute(
                     "SELECT * FROM user_profiles WHERE user_id = ?",
                     (user_id,)
@@ -245,7 +245,7 @@ class UserHistoryService:
     def _save_to_db(self, profile: UserProfile):
         """Сохранить профиль в SQLite."""
         try:
-            with self.db._conn() as conn:
+            with self.db.get_conn() as conn:
                 conn.execute(
                     """INSERT OR REPLACE INTO user_profiles
                        (user_id, first_seen, last_seen, total_queries,

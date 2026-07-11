@@ -36,4 +36,11 @@ class MockPartnerCatalog(ProductCatalog):
         return random.sample(mock_products, k=random.randint(1, 3))
 
     async def find_products_by_query(self, query: str, category: Optional[str] = None) -> List[Product]:
-        return []
+        """Поиск товаров по текстовому запросу."""
+        # Используем MarketplaceScraper для поиска
+        from app.adapters.marketplace_scraper import MarketplaceScraper
+        scraper = MarketplaceScraper()
+        try:
+            return await scraper.search(query, max_results=5)
+        finally:
+            await scraper.close()
