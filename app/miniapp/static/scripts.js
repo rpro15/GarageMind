@@ -34,7 +34,7 @@ let tg = window.Telegram?.WebApp;
 if (tg) { tg.expand(); tg.ready(); }
 
 // ===== Состояние =====
-let currentMode = 'chat'; // 'chat' | 'form'
+let currentMode = 'chat';
 const userData = {
     brand: null,
     model: null,
@@ -109,6 +109,214 @@ document.querySelectorAll('.lang-option').forEach(function(opt) {
         document.getElementById('langMenu').classList.add('hidden');
     });
 });
+
+// ===== Русские названия брендов → латинские =====
+const BRAND_RU_MAP = {
+    "лада": "Lada", "лда": "Lada", "ваз": "Lada", "вз": "Lada",
+    "тойота": "Toyota", "тота": "Toyota",
+    "бмв": "BMW",
+    "мерседес": "Mercedes-Benz", "мерс": "Mercedes-Benz",
+    "ауди": "Audi",
+    "киа": "Kia", "kіа": "Kia",
+    "хёндэ": "Hyundai", "хендай": "Hyundai", "хендэ": "Hyundai", "хюндай": "Hyundai", "хундай": "Hyundai",
+    "ниссан": "Nissan",
+    "мазда": "Mazda",
+    "форд": "Ford",
+    "шкода": "Skoda", "skoda": "Skoda",
+    "фольксваген": "Volkswagen", "фв": "Volkswagen", "vw": "Volkswagen", "фольц": "Volkswagen",
+    "рено": "Renault",
+    "митсубиси": "Mitsubishi", "мицубиси": "Mitsubishi", "митсу": "Mitsubishi",
+    "лексус": "Lexus",
+    "хонда": "Honda",
+    "субару": "Subaru",
+    "шевроле": "Chevrolet",
+    "опель": "Opel",
+    "пежо": "Peugeot",
+    "ситроен": "Citroen",
+    "вольво": "Volvo",
+    "фиат": "Fiat",
+    "порше": "Porsche", "porsche": "Porsche",
+    "ягуар": "Jaguar",
+    "ленд ровер": "Land Rover", "лендровер": "Land Rover",
+    "мини": "Mini",
+    "смарт": "Smart",
+    "джили": "Geely", "geely": "Geely",
+    "черри": "Chery", "cherу": "Chery",
+    "хавал": "Haval", "haval": "Haval",
+    "омода": "Omoda",
+    "джейко": "Jaecoo",
+    "уаз": "UAZ", "uaz": "UAZ",
+    "газ": "GAZ",
+    "москвич": "Moskvich", "москвич": "Moskvich",
+    "киа": "Kia",
+    "хендэ": "Hyundai",
+    "тесла": "Tesla", "tesla": "Tesla",
+    "китай": "Chery",
+    "великий стіна": "Great Wall", "грейт вол": "Great Wall",
+    "танк": "Tank (GWM)",
+    "байк": "BYD", "byd": "BYD", "бивайди": "BYD",
+    "зикр": "Zeekr", "zeekr": "Zeekr",
+    "ли": "Li Auto",
+    "нио": "NIO",
+    "воя": "Voyah",
+    "донфен": "Dongfeng",
+    "джи ес": "GAC",
+    "хончи": "Hongqi",
+    "эксид": "Exeed",
+    "чанъань": "Changan",
+    "changan": "Changan",
+    "овал": "Haval",
+    "сузуки": "Suzuki",
+    "субару": "Subaru",
+    "инфинити": "Infiniti",
+    "кадилак": "Cadillac",
+    "линколн": "Lincoln",
+    "додж": "Dodge",
+    "джип": "Jeep",
+    "крайслер": "Chrysler",
+    "альфа ромео": "Alfa Romeo",
+    "мазерат": "Maserati",
+    "феррари": "Ferrari",
+    "ламборгини": "Lamborghini",
+    "бентли": "Bentley",
+    "роллс ройс": "Rolls-Royce", "роллс": "Rolls-Royce",
+    "астон мартин": "Aston Martin",
+    "генсис": "Genesis", "генезис": "Genesis",
+    "ссангионг": "SsangYong", "ссан йонг": "SsangYong",
+    "рено": "Renault",
+    "датсун": "Datsun",
+    "ситроен": "Citroen",
+    "хенде": "Hyundai",
+    "шкода": "Skoda",
+};
+
+// ===== Транслит букв =====
+const CYR_TO_LAT = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'e','ж':'zh','з':'z','и':'i',
+    'й':'i','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t',
+    'у':'u','ф':'f','х':'h','ц':'ts','ч':'ch','ш':'sh','щ':'shch','ъ':'','ы':'y','ь':'',
+    'э':'e','ю':'iu','я':'ia',
+};
+
+function translit(text) {
+    let r = '';
+    for (const ch of text.toLowerCase()) {
+        r += CYR_TO_LAT[ch] || ch;
+    }
+    return r;
+}
+
+function findBrand(text) {
+    const t = text.toLowerCase().trim();
+    // 1. Точное совпадение по BRAND_RU_MAP
+    if (BRAND_RU_MAP[t]) return BRAND_RU_MAP[t];
+    // 2. Поиск по ключам (первые слова)
+    for (const [ru, en] of Object.entries(BRAND_RU_MAP)) {
+        if (t.startsWith(ru) || t.includes(' ' + ru)) return en;
+    }
+    // 3. Прямое совпадение по латинским названиям
+    for (const b of BRANDS) {
+        if (t.includes(b.toLowerCase())) return b;
+    }
+    // 4. Транслитерируем и ищем
+    const translitText = translit(text);
+    for (const b of BRANDS) {
+        if (translitText.includes(b.toLowerCase())) return b;
+        if (b.toLowerCase().startsWith(translitText.slice(0, 3))) return b;
+    }
+    return null;
+}
+
+function findModel(text, brand) {
+    const models = MODELS_RU[brand] || [];
+    const t = text.toLowerCase();
+    // Точное совпадение
+    for (const m of models) {
+        if (t.includes(m.toLowerCase())) return m;
+    }
+    // Транслит
+    const tt = translit(text);
+    for (const m of models) {
+        if (tt.includes(m.toLowerCase())) return m;
+    }
+    // Префикс 3+ символа
+    for (const m of models) {
+        const prefix = m.toLowerCase().slice(0, Math.min(3, m.length));
+        if (prefix.length >= 2 && tt.includes(prefix)) return m;
+    }
+    return null;
+}
+
+function findYear(text) {
+    const nums = text.match(/\d{4}/);
+    if (nums) {
+        const y = parseInt(nums[0]);
+        if (y >= 1980 && y <= 2030) return y;
+    }
+    return null;
+}
+
+function findDrivingStyle(text) {
+    const t = text.toLowerCase();
+    for (const [key, val] of Object.entries(DRIVING_STYLES)) {
+        if (t.includes(key)) return val;
+    }
+    if (t.includes("ком")) return "comfort";
+    if (t.includes("спорт")) return "sport";
+    if (t.includes("динамик")) return "sport";
+    if (t.includes("эко")) return "economy";
+    return null;
+}
+
+function findSeason(text) {
+    const t = text.toLowerCase();
+    for (const [key, val] of Object.entries(SEASONS)) {
+        if (t.includes(key)) return val;
+    }
+    for (const [key, val] of Object.entries(MONTHS_SEASON)) {
+        if (t.includes(key)) return val;
+    }
+    if (t.includes("лет")) return "summer";
+    if (t.includes("зим")) return "winter";
+    if (t.includes("все")) return "all_season";
+    if (t.includes("круглогодич")) return "all_season";
+    return null;
+}
+
+function findBudget(text) {
+    const t = text.toLowerCase();
+    if (t.includes("нет") || t.includes("любой") || t.includes("не") || t.includes("пропустить") || t.includes("без")) return 0;
+    const nums = text.match(/\d+/);
+    if (nums) return parseInt(nums[0]);
+    return null;
+}
+
+// ===== Умный парсер: вытаскивает всё что можно из одного сообщения =====
+function smartParse(text) {
+    const result = {};
+    const brand = findBrand(text);
+    if (brand) result.brand = brand;
+
+    // Если знаем бренд — ищем модель среди известных для этого бренда
+    if (brand) {
+        const model = findModel(text, brand);
+        if (model) result.model = model;
+    }
+
+    const year = findYear(text);
+    if (year) result.year = year;
+
+    const style = findDrivingStyle(text);
+    if (style) result.driving_style = style;
+
+    const season = findSeason(text);
+    if (season) result.season = season;
+
+    const budget = findBudget(text);
+    if (budget) result.budget = budget;
+
+    return result;
+}
 
 // ===== ПОЛНАЯ БАЗА МАРОК И МОДЕЛЕЙ (РФ рынок) =====
 const MODELS_RU = {
@@ -246,88 +454,108 @@ const MONTHS_SEASON = {
     "зима": "winter",
 };
 
-// ===== Шаги диалога (чат) =====
-const DIALOG = [
-    {
-        question: "Привет! Я AI-консультант по подбору шин 🚗\n\nС какой маркой автомобиля?",
-        parse: (text) => {
-            const found = BRANDS.find(b => text.toLowerCase().includes(b.toLowerCase()));
-            if (found) return { valid: true, value: found };
-            for (const b of BRANDS) {
-                if (text.length >= 3 && b.toLowerCase().startsWith(text.toLowerCase().slice(0, 3))) {
-                    return { valid: true, value: b };
-                }
-            }
-            return { valid: false, hint: `Я не узнал марку. Напишите одну из: ${BRANDS.slice(0, 8).join(', ')}...` };
-        }
-    },
-    {
-        question: (data) => `Отлично, ${data.brand}! Какая модель?`,
-        parse: (text, data) => {
-            const models = MODELS_RU[data.brand] || [];
-            const found = models.find(m => text.toLowerCase().includes(m.toLowerCase()));
-            if (found) return { valid: true, value: found };
-            for (const m of models) {
-                if (text.length >= 2 && m.toLowerCase().startsWith(text.toLowerCase().slice(0, 2))) {
-                    return { valid: true, value: m };
-                }
-            }
-            return { valid: false, hint: `Модели ${data.brand}: ${models.join(', ')}` };
-        }
-    },
-    {
-        question: "Какой год выпуска?",
-        parse: (text) => {
-            const nums = text.match(/\d{4}/);
-            if (nums) {
-                const y = parseInt(nums[0]);
-                if (y >= 1980 && y <= 2026) return { valid: true, value: y };
-            }
-            return { valid: false, hint: "Напишите год цифрами (например, 2020)" };
-        }
-    },
-    {
-        question: "Стиль вождения?\n\n🚗 Комфорт — плавная езда\n🏎️ Спорт — динамика\n⛽ Эконом — экономия",
-        parse: (text) => {
-            const t = text.toLowerCase();
-            for (const [key, val] of Object.entries(DRIVING_STYLES)) {
-                if (t.includes(key)) return { valid: true, value: val };
-            }
-            if (t.includes("ком")) return { valid: true, value: "comfort" };
-            if (t.includes("спорт")) return { valid: true, value: "sport" };
-            if (t.includes("эко")) return { valid: true, value: "economy" };
-            return { valid: false, hint: "Выберите: Комфорт, Спорт или Эконом" };
-        }
-    },
-    {
-        question: "Какой сезон?\n\n☀️ Лето\n❄️ Зима\n🌦️ Всесезон",
-        parse: (text) => {
-            const t = text.toLowerCase();
-            for (const [key, val] of Object.entries(SEASONS)) {
-                if (t.includes(key)) return { valid: true, value: val };
-            }
-            for (const [key, val] of Object.entries(MONTHS_SEASON)) {
-                if (t.includes(key)) return { valid: true, value: val };
-            }
-            if (t.includes("лет")) return { valid: true, value: "summer" };
-            if (t.includes("зим")) return { valid: true, value: "winter" };
-            if (t.includes("все")) return { valid: true, value: "all_season" };
-            return { valid: false, hint: "Выберите: Лето, Зима или Всесезон" };
-        }
-    },
-    {
-        question: "Какой бюджет? (₽)\n\nМожно пропустить — скажите 'любой'",
-        parse: (text) => {
-            const t = text.toLowerCase();
-            if (t.includes("нет") || t.includes("любой") || t.includes("не") || t.includes("пропустить") || t.includes("без")) {
-                return { valid: true, value: null };
-            }
-            const nums = text.match(/\d+/);
-            if (nums) return { valid: true, value: parseInt(nums[0]) };
-            return { valid: false, hint: "Напишите сумму цифрами (например, 40000) или 'любой'" };
-        }
-    },
+// ===== Умный диалог (не шаг за шагом, а сбор всех данных) =====
+// Определяем, какие поля ещё не заполнены
+const FIELDS = [
+    { key: 'brand', question: 'С какой маркой автомобиля?' },
+    { key: 'model', question: (d) => `Какая модель ${d.brand}?` },
+    { key: 'year', question: 'Какой год выпуска?' },
+    { key: 'driving_style', question: 'Стиль вождения?\n🚗 Комфорт\n🏎️ Спорт\n⛽ Эконом' },
+    { key: 'season', question: 'Какой сезон?\n☀️ Лето\n❄️ Зима\n🌦️ Всесезон' },
+    { key: 'budget', question: 'Бюджет на комплект? (₽)\nИли напишите "любой"' },
 ];
+
+function getNextMissingField() {
+    for (const f of FIELDS) {
+        if (userData[f.key] === null || userData[f.key] === undefined || userData[f.key] === '') {
+            return f;
+        }
+    }
+    return null;
+}
+
+function askNextQuestion() {
+    const missing = getNextMissingField();
+    if (!missing) {
+        // Всё собрано — шлём запрос
+        addTyping();
+        setTimeout(() => { removeTyping(); sendRecommendation(); }, 600);
+        return;
+    }
+    const q = typeof missing.question === 'function' ? missing.question(userData) : missing.question;
+    addMessage(q);
+}
+
+function handleUserInput(text) {
+    if (isProcessing) return;
+    text = text.trim();
+    if (!text) return;
+
+    addMessage(text, 'user');
+    chatInput.value = '';
+
+    // Умный парсинг
+    const parsed = smartParse(text);
+    let newlyFilled = false;
+
+    for (const [key, val] of Object.entries(parsed)) {
+        if (val !== null && val !== undefined && val !== '' && val !== 0) {
+            if (userData[key] === null || userData[key] === undefined || userData[key] === '') {
+                // Для бюджета 0 = "любой", не заполняем
+                if (key === 'budget' && val === 0) continue;
+                userData[key] = val;
+                newlyFilled = true;
+            }
+        }
+    }
+
+    // Если парсинг не дал результата — уточняем
+    if (!newlyFilled) {
+        const missing = getNextMissingField();
+        if (!missing) {
+            // Всё уже есть
+            addTyping();
+            setTimeout(() => { removeTyping(); sendRecommendation(); }, 600);
+            return;
+        }
+        let hint = '';
+        if (missing.key === 'brand') hint = 'Напишите марку авто, например: Тойота, БМВ, Мерседес, Киа...';
+        else if (missing.key === 'model') hint = `Напишите модель, например: Camry, X5, Polo${userData.brand ? ' для ' + userData.brand : ''}`;
+        else if (missing.key === 'year') hint = 'Напишите год цифрами (например, 2020)';
+        else if (missing.key === 'driving_style') hint = 'Выберите: Комфорт, Спорт или Эконом';
+        else if (missing.key === 'season') hint = 'Выберите: Лето, Зима или Всесезон';
+        else if (missing.key === 'budget') hint = 'Напишите бюджет или "любой"';
+        addTyping();
+        setTimeout(() => { removeTyping(); addMessage(hint); }, 600);
+        return;
+    }
+
+    // Показываем что поняли
+    const parts = [];
+    if (parsed.brand) parts.push(`Марка: ${parsed.brand}`);
+    if (parsed.model) parts.push(`Модель: ${parsed.model}`);
+    if (parsed.year) parts.push(`Год: ${parsed.year}`);
+    if (parsed.driving_style) {
+        const styleNames = { comfort: 'Комфорт', sport: 'Спорт', economy: 'Эконом' };
+        parts.push(`Стиль: ${styleNames[parsed.driving_style] || parsed.driving_style}`);
+    }
+    if (parsed.season) {
+        const seasonNames = { summer: 'Лето', winter: 'Зима', all_season: 'Всесезон' };
+        parts.push(`Сезон: ${seasonNames[parsed.season] || parsed.season}`);
+    }
+    if (parsed.budget && parsed.budget > 0) parts.push(`Бюджет: ${parsed.budget} ₽`);
+
+    if (parts.length > 0) {
+        addTyping();
+        setTimeout(() => {
+            removeTyping();
+            addMessage(`✅ Принято: ${parts.join(', ')}`);
+            setTimeout(() => askNextQuestion(), 500);
+        }, 400);
+    } else {
+        setTimeout(() => askNextQuestion(), 400);
+    }
+}
 
 // ===== Переключение режимов =====
 function switchMode(mode) {
@@ -340,7 +568,10 @@ function switchMode(mode) {
         headerSub.innerHTML = '<i class="fas fa-robot"></i> <span>AI-консультант по подбору шин</span>';
         // Если чат пустой — начать диалог
         if (messagesEl.children.length === 0) {
-            setTimeout(() => askQuestion(0), 300);
+            setTimeout(() => {
+                addMessage("Привет! Я AI-консультант по подбору шин 🚗\nНапишите марку авто (можно на русском), например: Тойота Камри 2020, комфорт, лето");
+                setTimeout(() => askNextQuestion(), 500);
+            }, 300);
         }
     } else {
         chatMode.classList.add('hidden');
@@ -401,49 +632,12 @@ function scrollChat() {
 }
 
 function setStepClass(step) {
-    const app = document.getElementById('app');
-    for (let i = 0; i <= 6; i++) app.classList.remove(`step-${i}`);
-    if (step >= 0 && step <= 5) app.classList.add(`step-${step}`);
+    // Устаревшая функция — больше не используется
 }
 
-// ===== Чат: вопросы =====
+// ===== Чат: вопросы (устаревшая заглушка) =====
 function askQuestion(step) {
-    const dialog = DIALOG[step];
-    if (!dialog) return;
-    const q = typeof dialog.question === 'function' ? dialog.question(userData) : dialog.question;
-    addMessage(q);
-    setStepClass(step);
-}
-
-function handleUserInput(text) {
-    if (isProcessing) return;
-    text = text.trim();
-    if (!text) return;
-
-    addMessage(text, 'user');
-    chatInput.value = '';
-
-    const dialog = DIALOG[currentStep];
-    if (!dialog) return;
-
-    const result = dialog.parse(text, userData);
-
-    if (!result.valid) {
-        addTyping();
-        setTimeout(() => { removeTyping(); addMessage(result.hint); }, 600);
-        return;
-    }
-
-    const keys = ['brand', 'model', 'year', 'driving_style', 'season', 'budget'];
-    userData[keys[currentStep]] = result.value;
-    currentStep++;
-
-    if (currentStep >= DIALOG.length) {
-        addTyping();
-        setTimeout(() => { removeTyping(); sendRecommendation(); }, 800);
-    } else {
-        setTimeout(() => askQuestion(currentStep), 400);
-    }
+    // больше не используется
 }
 
 // ===== Общий запрос к API =====
