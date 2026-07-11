@@ -5,7 +5,7 @@
  * Офлайн-режим: кэширует index.html, CSS, JS, языковые файлы
  */
 
-const CACHE_NAME = 'garagemind-v1';
+const CACHE_NAME = 'garagemind-v2';
 const urlsToCache = [
   '/miniapp/index.html',
   '/miniapp/static/style.css',
