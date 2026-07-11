@@ -12,7 +12,20 @@ class DeepSeekClient(LLMClient):
         self.model = settings.DEEPSEEK_MODEL or "deepseek-chat"
         self.timeout = 30.0
 
-    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    async def generate_text(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        messages: Optional[list] = None,
+    ) -> str:
+        """
+        Генерация текста.
+
+        Args:
+            prompt: пользовательский запрос (используется если не передан messages)
+            system_prompt: системный промпт
+            messages: полный список сообщений [{role, content}, ...] (приоритетнее prompt)
+        """
         # Если нет API-ключа — возвращаем заглушку
         if not self.api_key:
             return (
@@ -23,11 +36,16 @@ class DeepSeekClient(LLMClient):
                 "Рекомендуем размеры: 225/55 R17 или 215/55 R17."
             )
 
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-        
+        if messages:
+            # Если передан полный список сообщений — используем его
+            deepseek_messages = messages
+        else:
+            # Иначе строим из system_prompt + prompt
+            deepseek_messages = []
+            if system_prompt:
+                deepseek_messages.append({"role": "system", "content": system_prompt})
+            deepseek_messages.append({"role": "user", "content": prompt})
+
         async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             response = await client.post(
                 f"{self.base_url}/chat/completions",
@@ -37,7 +55,7 @@ class DeepSeekClient(LLMClient):
                 },
                 json={
                     "model": self.model,
-                    "messages": messages,
+                    "messages": deepseek_messages,
                     "temperature": 0.7,
                     "max_tokens": 1000
                 }

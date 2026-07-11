@@ -25,6 +25,7 @@ from app.api.admitad import admitad_blueprint
 from app.services.sources import MultiSourceProductService
 from app.services.sources.wildberries_source import WildberriesSource
 from app.services.sources.partner_source import PartnerSource
+from app.services.rag import EmbeddingService, VectorStore, Retriever
 
 # Структурированное логирование
 try:
@@ -62,24 +63,23 @@ def create_app() -> Flask:
     MINIAPP_STATIC = os.path.join(app.root_path, 'miniapp', 'static')
 
     # Rate Limiting (memory by default, Redis если доступен)
+    limiter_storage = "memory://"
     try:
         if settings.REDIS_URL and 'redis' in settings.REDIS_URL:
             import redis as redis_lib
             r = redis_lib.from_url(settings.REDIS_URL)
             r.ping()
-            storage = RedisStorage(settings.REDIS_URL)
+            limiter_storage = settings.REDIS_URL
             logger.info("🚦 Rate limiter: Redis storage")
         else:
-            storage = MemoryStorage()
             logger.info("🚦 Rate limiter: memory storage")
     except Exception:
-        storage = MemoryStorage()
         logger.info("🚦 Rate limiter: memory storage (fallback)")
 
     limiter = Limiter(
         key_func=get_remote_address,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://",
+        storage_uri=limiter_storage,
     )
     limiter.init_app(app)
 
@@ -121,7 +121,13 @@ def create_app() -> Flask:
     ))
     logger.info("🏪 MultiSourceProductService: Admitad + Wildberries + fallback")
 
-    tire_service = TireRecommendationService(llm_client, catalog)
+    # RAG: векторный поиск по каталогу шин
+    embedding_service = EmbeddingService()
+    vector_store = VectorStore()
+    retriever = Retriever(embedding_service, vector_store)
+    logger.info("🧠 RAG retriever initialized")
+
+    tire_service = TireRecommendationService(llm_client, catalog, retriever=retriever)
 
     # Инициализация кэша (Redis)
     cache = get_cache()
@@ -139,6 +145,7 @@ def create_app() -> Flask:
         "vin_decoder": vin_service,
         "tire_recommendation": tire_service,
         "cache": cache,
+        "llm_client": llm_client,
     }
 
     return app

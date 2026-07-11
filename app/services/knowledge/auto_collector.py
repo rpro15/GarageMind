@@ -1,16 +1,16 @@
 """
-Автоматический генератор тестовых данных для GarageMind AI.
+Автоматический сборщик данных о шинах с автомобильных форумов.
 
 Работает в фоне по расписанию:
-- Каждый час проверяет, сколько записей уже сгенерировано за день
-- Добавляет до 100 записей в день (контролируется через Redis)
-- Никак не влияет на производительность приложения
-
-В будущем заменить на реальный сбор отзывов с форумов через forum_scraper.
+- Каждый час проверяет, сколько отзывов собрано за день
+- Собирает реальные отзывы с drive2.ru, drom.ru, pnevo.ru и клубных форумов
+- Добавляет до 100 записей в день (контролируется через COLLECTOR_DAILY_LIMIT)
+- Извлекает плюсы/минусы, оценки, названия шин — складывает в SQLite
 
 Лимиты (настраиваются в .env):
-    COLLECTOR_DAILY_LIMIT=100     # макс записей в день
+    COLLECTOR_DAILY_LIMIT=100           # макс записей в день
     AUTO_COLLECTOR_INTERVAL_MINUTES=60  # проверка каждый час
+    AUTO_COLLECTOR_REVIEWS_PER_CYCLE=10 # сколько добавлять за цикл
 
 Запуск:
     python3 -m app.services.knowledge.auto_collector            # разовый запуск
@@ -21,19 +21,19 @@ import logging
 import sys
 import random
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 from app.services.database import DatabaseService
 from app.services.database.schema import TireReview, TireProblem
+from app.services.sources.forum_scraper import ForumScraper
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# БАЗА ЗНАНИЙ
+# Реальные модели шин с характеристиками (для seed-данных)
 # ============================================================
 
-# Реальные модели шин с характеристиками
 KNOWN_TIRES = [
     ("Michelin Pilot Sport 4", "sport", 4.7),
     ("Continental PremiumContact 6", "comfort", 4.5),
@@ -52,31 +52,6 @@ KNOWN_TIRES = [
     ("Goodyear Wrangler AT Adventure", "offroad", 4.0),
 ]
 
-# Реальные отзывы (не шаблоны, а готовые тексты)
-REAL_REVIEWS = [
-    "Отличные шины! После 20000 км износ минимальный. Держат дорогу отлично как в сухую, так и в дождь.",
-    "Езжу второй сезон. По комфорту лучшие, но на ямах быстро убиваются. На трассе тишина.",
-    "Средние шины за свою цену. Цена адекватная, но шумноваты на скорости выше 120 км/ч.",
-    "Лучшие для этого авто! Расход топлива упал на 0.5л по трассе. Но нужно объезжать ямы.",
-    "Хороший бюджетный вариант. Для города отлично подходят. На трассе чуть шумноваты.",
-    "Эталонные шины. Тишина в салоне на любом покрытии. Рекомендую всем владельцам.",
-    "Очень доволен покупкой. Отлично держат мокрую дорогу, аквапланирования нет.",
-    "Брал по рекомендации знакомых. Не пожалел. Тихие, комфортные, износ равномерный.",
-    "Шины огонь! Разгон, торможение, повороты — всё на высоте. Минус только цена.",
-    "За эти деньги лучше не найти. Из минусов — шумноваты на бетонке.",
-    "Отличные шины для зимы. Мягкие, не дубеют в мороз. Снег держат уверенно.",
-    "Ставлю только их. Третий сезон пошёл. Износ в пределах нормы.",
-    "Хорошая управляемость на сухом и мокром покрытии. Рекомендую.",
-    "Немного жёстковаты, но это плата за управляемость. На автобане ведут себя отлично.",
-    "Не ожидал такого качества за эти деньги. Приятно удивлён.",
-    "Отличные шины для спокойной езды. Тихие, мягкие, бюджетные.",
-    "Шины отработали 3 сезона. Сейчас поменял на такие же. Всё устраивает.",
-    "Хорошо держат колею, не плавают. На мокрой уверенно, тормозной путь короткий.",
-    "Для города самое то. Не шумят, ямы глотают достойно. Трасса тоже нормально.",
-    "Лучшие спортивные шины в этом размере. На треке ведут себя великолепно.",
-]
-
-# Плюсы и минусы
 ALL_PROS = [
     "тихие, отличное сцепление, износостойкие",
     "комфортные, мягкие, хорошо держат дорогу",
@@ -102,7 +77,6 @@ ALL_CONS = [
     "не любят перегрузки",
 ]
 
-# Известные проблемы
 PROBLEMS = [
     ("critical", "Быстрый износ передних шин (10-15 тыс. км)"),
     ("warning", "Шум на скорости выше 90 км/ч"),
@@ -120,23 +94,22 @@ class AutoCollector:
     Фоновый сборщик знаний.
 
     Каждый цикл:
-    1. Проверяет дневной лимит через Redis (или SQLite)
-    2. Добавляет до N новых отзывов для случайных авто
-    3. Добавляет проблемы
+    1. Проверяет дневной лимит
+    2. Сначала пытается собрать реальные отзывы с форумов (ForumScraper)
+    3. Если форумы не дали данных — генерирует seed-отзывы
+    4. Добавляет проблемы
     """
 
     def __init__(self, db: Optional[DatabaseService] = None):
         self.db = db or DatabaseService()
+        self.scraper = ForumScraper(db)
         self.running = False
         self.total_collected = 0
         self._daily_limit = settings.COLLECTOR_DAILY_LIMIT
         self._reviews_per_cycle = settings.AUTO_COLLECTOR_REVIEWS_PER_CYCLE
 
     def _get_today_count(self) -> int:
-        """
-        Сколько отзывов уже собрано сегодня.
-        Храним счётчик в самой БД (по дате).
-        """
+        """Сколько отзывов уже собрано сегодня."""
         today = date.today().isoformat()
         with self.db._conn() as conn:
             row = conn.execute(
@@ -151,11 +124,12 @@ class AutoCollector:
             "reviews_added": 0,
             "problems_added": 0,
             "skipped_daily_limit": 0,
+            "forum_reviews": 0,
+            "seed_reviews": 0,
             "errors": 0,
         }
 
         try:
-            # Проверяем дневной лимит
             today_count = self._get_today_count()
             remaining = self._daily_limit - today_count
 
@@ -176,14 +150,21 @@ class AutoCollector:
                 reviews_to_add,
             )
 
-            # Собираем отзывы
-            added = await self._collect_reviews(target=reviews_to_add)
-            stats["reviews_added"] = added
+            # 1. Пробуем собрать реальные отзывы с форумов
+            added_forum = await self._collect_forum_reviews(target=reviews_to_add)
+            stats["forum_reviews"] = added_forum
 
-            # Добавляем немного проблем
+            # 2. Если форумы не дали — генерируем seed
+            if added_forum < reviews_to_add:
+                added_seed = await self._collect_seed_reviews(target=reviews_to_add - added_forum)
+                stats["seed_reviews"] = added_seed
+
+            stats["reviews_added"] = added_forum + added_seed
+
+            # 3. Добавляем проблемы
             stats["problems_added"] = await self._collect_problems()
 
-            self.total_collected += added
+            self.total_collected += stats["reviews_added"]
 
         except Exception as e:
             logger.error("Collect error: %s", e, exc_info=True)
@@ -191,28 +172,66 @@ class AutoCollector:
 
         return stats
 
-    async def _collect_reviews(self, target: int = 10) -> int:
-        """Добавляет новые отзывы. Генерирует уникальные тексты."""
+    async def _collect_forum_reviews(self, target: int = 10) -> int:
+        """Собирает реальные отзывы с форумов через ForumScraper."""
+        brands = self.db.get_brands()
+        if not brands:
+            return 0
+
+        random.shuffle(brands)
+        total_added = 0
+
+        for brand in brands[:3]:  # максимум 3 бренда за цикл
+            models = self.db.get_models(brand)
+            if not models:
+                continue
+
+            model = random.choice(models)
+            logger.info("🔍 Собираю отзывы с форумов для %s %s...", brand, model)
+
+            try:
+                reviews = await self.scraper.fetch_reviews(
+                    brand=brand,
+                    model=model,
+                    max_reviews=target,
+                )
+                if reviews:
+                    total_added += len(reviews)
+                    logger.info("✅ Форумные отзывы для %s %s: %d", brand, model, len(reviews))
+
+                if total_added >= target:
+                    break
+
+                # Пауза между брендами
+                await asyncio.sleep(random.uniform(2.0, 4.0))
+
+            except Exception as e:
+                logger.warning("Ошибка ForumScraper для %s %s: %s", brand, model, e)
+                continue
+
+        return total_added
+
+    async def _collect_seed_reviews(self, target: int = 10) -> int:
+        """Генерирует seed-отзывы как запасной вариант."""
         with self.db._conn() as conn:
             cars = conn.execute(
                 "SELECT id, brand, model FROM car_models ORDER BY RANDOM()"
             ).fetchall()
 
         if not cars:
-            logger.warning("Нет автомобилей в БД. Запустите seed_data сначала.")
+            logger.warning("Нет автомобилей в БД.")
             return 0
 
         added = 0
         attempts = 0
-        max_attempts = target * 5  # Предохранитель от бесконечного цикла
+        max_attempts = target * 5
 
         while added < target and attempts < max_attempts:
             attempts += 1
             car = random.choice(cars)
-            tire = random.choice(KNOWN_TIRES)
-            tire_name, _, base_rating = tire
+            tire_name, _, base_rating = random.choice(KNOWN_TIRES)
 
-            # Проверяем, нет ли уже такого же отзыва сегодня
+            # Проверяем уникальность
             with self.db._conn() as conn:
                 exists = conn.execute(
                     """SELECT COUNT(*) FROM tire_reviews
@@ -224,23 +243,27 @@ class AutoCollector:
             if exists > 0:
                 continue
 
-            # Генерируем отзыв
-            rating = round(base_rating + random.uniform(-0.5, 0.3), 1)
-            rating = max(1.0, min(5.0, rating))
-
-            review_text = random.choice(REAL_REVIEWS)
-            pros = random.choice(ALL_PROS)
-            cons = random.choice(ALL_CONS)
+            rating = round(max(1.0, min(5.0, base_rating + random.uniform(-0.5, 0.3))), 1)
+            review_text = random.choice([
+                "Отличные шины! После 20000 км износ минимальный.",
+                "Езжу второй сезон. По комфорту лучшие.",
+                "Хороший бюджетный вариант. Для города отлично.",
+                "Очень доволен покупкой. Отлично держат мокрую дорогу.",
+                "Эталонные шины. Тишина в салоне на любом покрытии.",
+                "Хорошая управляемость на сухом и мокром покрытии.",
+                "Для города самое то. Не шумят, ямы глотают достойно.",
+                "Отличные шины для спокойной езды. Тихие, мягкие.",
+            ])
 
             review = TireReview(
                 car_id=car["id"],
                 tire_name=tire_name,
                 tire_size="",
                 rating=rating,
-                pros=pros,
-                cons=cons,
-                text=f"{review_text} (авто: {car['brand']} {car['model']})",
-                source="auto_collector",
+                pros=random.choice(ALL_PROS),
+                cons=random.choice(ALL_CONS),
+                text=f"{review_text} (seed: {car['brand']} {car['model']})",
+                source="auto_collector_seed",
                 date_added=date.today().isoformat(),
                 helpful_count=random.randint(1, 50),
             )
@@ -248,12 +271,11 @@ class AutoCollector:
             try:
                 self.db.add_review(review)
                 added += 1
-            except Exception as e:
-                logger.warning("Ошибка добавления отзыва: %s", e)
+            except Exception:
                 continue
 
         if added > 0:
-            logger.info("✅ Добавлено %d отзывов за цикл", added)
+            logger.info("✅ Добавлено %d seed-отзывов за цикл", added)
         return added
 
     async def _collect_problems(self, target: int = 3) -> int:
@@ -268,7 +290,6 @@ class AutoCollector:
             tire_name = random.choice(KNOWN_TIRES)[0]
             severity, problem = random.choice(PROBLEMS)
 
-            # Проверяем уникальность
             with self.db._conn() as conn:
                 exists = conn.execute(
                     "SELECT COUNT(*) FROM tire_problems WHERE car_id = ? AND problem = ?",
@@ -298,12 +319,7 @@ class AutoCollector:
         return added
 
     async def run_daemon(self, interval_minutes: int = 60):
-        """
-        Запускает демона, который собирает данные каждые N минут.
-
-        Args:
-            interval_minutes: интервал между циклами (по умолчанию 60 мин)
-        """
+        """Запускает демона, который собирает данные каждые N минут."""
         self.running = True
         logger.info(
             "🚀 AutoCollector daemon started (interval=%d min, daily_limit=%d)",
@@ -317,8 +333,10 @@ class AutoCollector:
 
                 if stats.get("reviews_added", 0) > 0 or stats.get("problems_added", 0) > 0:
                     logger.info(
-                        "📊 Собрано: +%d отзывов, +%d проблем (всего: %d)",
+                        "📊 Собрано: +%d отзывов (форум: %d, seed: %d), +%d проблем (всего: %d)",
                         stats["reviews_added"],
+                        stats["forum_reviews"],
+                        stats["seed_reviews"],
                         stats["problems_added"],
                         self.total_collected,
                     )
@@ -330,7 +348,6 @@ class AutoCollector:
             except Exception as e:
                 logger.error("Ошибка цикла демона: %s", e, exc_info=True)
 
-            # Спим до следующего цикла
             await asyncio.sleep(interval_minutes * 60)
 
         logger.info("🛑 AutoCollector остановлен")
@@ -371,6 +388,8 @@ async def main():
         stats["cars"],
         stats["reviews"],
     )
+
+    await collector.scraper.close()
 
 
 if __name__ == "__main__":

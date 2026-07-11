@@ -9,50 +9,18 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - REDIS_URL=redis://redis:6379/0
-      - MINIAPP_URL=https://rpro.su/miniapp/
+      - MINIAPP_URL=https://your-domain.com/miniapp/
       - SECRET_KEY=${SECRET_KEY}
       - LOG_LEVEL=INFO
-      # Gunicorn
-      - GUNICORN_WORKERS=4
-      - GUNICORN_TIMEOUT=30
-      - GUNICORN_MAX_REQUESTS=1000
-      - GUNICORN_LOG_LEVEL=info
     depends_on:
       - redis
     volumes:
-      - ./data:/app/data
-      - ./app/miniapp/static:/app/miniapp/static
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 512M
-        reservations:
-          cpus: '1'
-          memory: 256M
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - garage-mind
-
+      - ./app:/app  # для разработки (в проде можно убрать)
+  
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    restart: unless-stopped
-    networks:
-      - garage-mind
 
   nginx:
     image: nginx:alpine
@@ -62,16 +30,6 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - ./app/miniapp/static:/usr/share/nginx/html/miniapp
-      - ./certs:/etc/letsencrypt
+      - ./certs:/etc/letsencrypt  # SSL сертификаты
     depends_on:
       - api
-    restart: unless-stopped
-    networks:
-      - garage-mind
-
-networks:
-  garage-mind:
-    driver: bridge
-
-volumes:
-  redis_data:

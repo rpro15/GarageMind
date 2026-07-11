@@ -48,6 +48,8 @@ def _comparison_service() -> ProductComparisonService:
         llm = current_app.extensions["services"].get("llm_client")
         if llm:
             current_app.extensions["services"]["product_comparison"] = ProductComparisonService(llm)
+        else:
+            raise RuntimeError("llm_client not initialized")
     return current_app.extensions["services"]["product_comparison"]
 
 
@@ -319,8 +321,143 @@ def get_models():
 
 
 # ──────────────────────────────────────────────
-#  Compare tires
+#  AI Chat (умный диалог)
 # ──────────────────────────────────────────────
+
+@api_blueprint.route('/chat', methods=['POST'])
+def ai_chat():
+    """
+    Умный AI-чат. Принимает историю сообщений и текущие данные пользователя.
+    DeepSeek ведёт диалог, задаёт уточняющие вопросы, помогает подобрать шины.
+
+    Body: {
+        "messages": [{"role": "user", "content": "У меня Тойота Камри"}, ...],
+        "user_data": {"brand": null, "model": null, ...},  // текущее состояние
+        "user_id": "optional"
+    }
+    Returns: {
+        "reply": "ответ AI",
+        "user_data": {"brand": "Toyota", "model": "Camry", ...},  // обновлённое
+        "ready": false,  // true если все данные собраны
+    }
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    messages = data.get("messages", [])
+    user_data = data.get("user_data", {})
+    user_id = data.get("user_id")
+
+    if not messages:
+        return jsonify({"error": "Missing messages"}), 400
+
+    async def _get_ai_response():
+        llm = current_app.extensions["services"].get("llm_client")
+
+        # Формируем системный промпт с текущим состоянием
+        filled_fields = []
+        if user_data.get("brand"): filled_fields.append(f"Марка: {user_data['brand']}")
+        if user_data.get("model"): filled_fields.append(f"Модель: {user_data['model']}")
+        if user_data.get("year"): filled_fields.append(f"Год: {user_data['year']}")
+        if user_data.get("driving_style"): filled_fields.append(f"Стиль: {user_data['driving_style']}")
+        if user_data.get("season"): filled_fields.append(f"Сезон: {user_data['season']}")
+        if user_data.get("budget"): filled_fields.append(f"Бюджет: {user_data['budget']}₽")
+
+        filled_str = "Известно:\n" + "\n".join(filled_fields) if filled_fields else "Данных пока нет."
+        missing = []
+        if not user_data.get("brand"): missing.append("марка")
+        if not user_data.get("model"): missing.append("модель")
+        if not user_data.get("year"): missing.append("год")
+        if not user_data.get("driving_style"): missing.append("стиль вождения")
+        if not user_data.get("season"): missing.append("сезон")
+        missing_str = f"Нужно узнать: {', '.join(missing)}." if missing else "Все данные собраны!"
+
+        # История пользователя, если есть
+        history_prompt = ""
+        if user_id:
+            try:
+                history_prompt = await _user_history_service().build_history_prompt(user_id)
+            except Exception:
+                pass
+
+        system_prompt = (
+            "Ты — AI-консультант по подбору автомобильных шин в чате. "
+            "Твоя задача — собирать данные от пользователя в разговоре и рекомендовать шины.\n\n"
+            f"{filled_str}\n{missing_str}\n\n"
+            f"{'История пользователя: ' + history_prompt if history_prompt else ''}"
+            "\n\nПравила:\n"
+            "1. Отвечай коротко и дружелюбно, задавай следующие вопросы по очереди\n"
+            "2. Если пользователь назвал что-то на русском — используй латинские названия\n"
+            "3. Извлекай из ответов пользователя: марку, модель, год, стиль вождения, сезон, бюджет\n"
+            "4. Если все данные собраны — скажи что готов и напиши 'ГОТОВ_К_ПОДБОРУ'\n"
+            "5. Не придумывай данные за пользователя — спрашивай если не уверен\n"
+            "6. Отвечай НА ТОМ ЖЕ ЯЗЫКЕ что и пользователь"
+        )
+
+        # Преобразуем сообщения в формат DeepSeek
+        deepseek_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages[-10:]:  # последние 10 сообщений (контекст)
+            role = msg.get("role", "user")
+            deepseek_messages.append({"role": role, "content": msg.get("content", "")})
+
+        try:
+            reply = await llm.generate_text(
+                prompt="",  # messages уже есть в deepseek_messages
+                system_prompt="",  # будет проигнорирован, используем chat-style
+                messages=deepseek_messages,
+            )
+        except TypeError:
+            # Fallback: если generate_text не поддерживает messages
+            last_user_msg = next(
+                (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+            )
+            prompt = f"{system_prompt}\n\nПоследнее сообщение пользователя: {last_user_msg}"
+            reply = await llm.generate_text(prompt, system_prompt="Ты — эксперт по шинам.")
+
+        # Проверяем готовность
+        ready = "ГОТОВ_К_ПОДБОРУ" in reply
+
+        # Парсим user_data из ответа (если AI упомянул новые данные)
+        parsed = _parse_ai_reply(reply, user_data)
+
+        return {
+            "reply": reply.replace("ГОТОВ_К_ПОДБОРУ", "").strip(),
+            "user_data": parsed,
+            "ready": ready,
+        }
+
+    response = _run_async(_get_ai_response())
+    return jsonify(response), 200
+
+
+def _parse_ai_reply(reply: str, current_user_data: dict) -> dict:
+    """Пытается извлечь данные из ответа AI (дополнительно к фронтенд-парсингу)."""
+    import re
+    result = dict(current_user_data)
+
+    # Ищем паттерны
+    patterns = {
+        "brand": r"марка[:\s]*([А-Яа-яA-Za-z-]+)",
+        "model": r"модель[:\s]*([А-Яа-яA-Za-z0-9-]+)",
+        "year": r"(\d{4})\s*(год|г\.|году)",
+        "budget": r"бюджет[:\s]*(\d+)",
+    }
+
+    for key, pattern in patterns.items():
+        match = re.search(pattern, reply.lower())
+        if match:
+            val = match.group(1).strip()
+            if key == "brand":
+                from app.services.transliteration import normalize_brand
+                val = normalize_brand(val)
+            elif key == "model":
+                from app.services.transliteration import normalize_model
+                val = normalize_model(val)
+            if val and not result.get(key):
+                result[key] = val
+
+    return result
 
 @api_blueprint.route('/compare_tires', methods=['POST'])
 def compare_tires():
