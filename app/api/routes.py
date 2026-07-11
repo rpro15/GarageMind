@@ -15,6 +15,7 @@ from app.services.vin_decoder import VinDecoderService
 from app.services.cache import get_cache
 from app.services.product_comparison import ProductComparisonService
 from app.services.user_history import UserHistoryService, run_migration
+from app.services.transliteration import normalize_brand, normalize_model
 from app.config.settings import settings
 
 
@@ -157,6 +158,9 @@ def recommend_tires():
         return jsonify({"error": f"Missing fields: {required}"}), 400
 
     try:
+        data['brand'] = normalize_brand(data['brand'])
+        data['model'] = normalize_model(data['model'])
+
         tire_request = TireRequest(
             brand=data['brand'],
             model=data['model'],
@@ -283,7 +287,7 @@ def get_brands():
 @api_blueprint.route('/models', methods=['GET'])
 def get_models():
     """Возвращает модели для выбранной марки (с кэшированием)."""
-    brand = request.args.get('brand')
+    brand = normalize_brand(request.args.get('brand', ''))
     if not brand:
         return jsonify({"error": "Missing brand parameter"}), 400
 
