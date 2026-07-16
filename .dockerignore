@@ -6,12 +6,14 @@ __pycache__/
 .gitignore
 .pytest_cache/
 .coverage
-data/
 screenshots/
 docs/
 tests/
 .venv/
 venv/
-*.md
 *.bak
 docker-compose*.yml
+README.md
+SETUP.md
+FIX_REPORT.md
+AGENTS.md
