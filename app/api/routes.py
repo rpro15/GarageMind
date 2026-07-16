@@ -10,7 +10,7 @@ from app.adapters.partner_api import MockPartnerCatalog
 from app.api.errors import ApiError
 from app.domain.models import TireRequest, DrivingStyle, Season
 from app.services.part_recognition import PartRecognitionService
-from app.services.tire_recomendation import TireRecommendationService
+from app.services.tire_recommendation import TireRecommendationService
 from app.services.vin_decoder import VinDecoderService
 from app.services.cache import get_cache
 from app.services.product_comparison import ProductComparisonService
@@ -436,26 +436,30 @@ def _parse_ai_reply(reply: str, current_user_data: dict) -> dict:
     import re
     result = dict(current_user_data)
 
-    # Ищем паттерны
+    # Ищем паттерны — с защитой от re.error
     patterns = {
-        "brand": r"марка[:\s]*([А-Яа-яA-Za-z-]+)",
-        "model": r"модель[:\s]*([А-Яа-яA-Za-z0-9-]+)",
-        "year": r"(\d{4})\s*(год|г\.|году)",
-        "budget": r"бюджет[:\s]*(\d+)",
+        "brand": r"марка[:\s]*([а-яёa-z-]+)",
+        "model": r"модель[:\s]*([а-яёa-z0-9-]+)",
+        "year": r"(?:^|\s)(\d{4})\s*(?:год|г\.|году|г\b)",
+        "budget": r"бюджет[:\s]*(\d{4,7})",
     }
 
+    reply_lower = reply.lower()
     for key, pattern in patterns.items():
-        match = re.search(pattern, reply.lower())
-        if match:
-            val = match.group(1).strip()
-            if key == "brand":
-                from app.services.transliteration import normalize_brand
-                val = normalize_brand(val)
-            elif key == "model":
-                from app.services.transliteration import normalize_model
-                val = normalize_model(val)
-            if val and not result.get(key):
-                result[key] = val
+        try:
+            match = re.search(pattern, reply_lower)
+            if match:
+                val = match.group(1).strip()
+                if key == "brand":
+                    from app.services.transliteration import normalize_brand
+                    val = normalize_brand(val)
+                elif key == "model":
+                    from app.services.transliteration import normalize_model
+                    val = normalize_model(val)
+                if val and not result.get(key):
+                    result[key] = val
+        except re.error:
+            continue
 
     return result
 

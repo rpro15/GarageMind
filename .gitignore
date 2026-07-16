@@ -14,3 +14,10 @@ data/qdrant/
 data/redis/
 node_modules/
 venv/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+*.db
+data/*.db

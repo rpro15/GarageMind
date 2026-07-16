@@ -54,10 +54,13 @@ class UserHistoryService:
     """
 
     REDIS_PREFIX = "user:"
+    _db_instance: Optional[DatabaseService] = None
 
     def __init__(self):
         self.cache = get_cache()
-        self.db = DatabaseService()
+        if UserHistoryService._db_instance is None:
+            UserHistoryService._db_instance = DatabaseService()
+        self.db = UserHistoryService._db_instance
 
     # ================================================================
     # Получение / сохранение профиля

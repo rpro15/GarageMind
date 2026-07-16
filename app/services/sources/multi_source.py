@@ -11,6 +11,10 @@ class BaseSource:
     async def fetch(self, request: TireRequest) -> List[Product]:
         raise NotImplementedError
 
+    async def search(self, query: str, max_results: int = 5) -> List[Product]:
+        """Поиск товаров по текстовому запросу (опционально)."""
+        return []
+
 
 class MultiSourceProductService:
     def __init__(self):
@@ -36,6 +40,27 @@ class MultiSourceProductService:
                 continue
 
             if len(all_products) >= min_products:
+                break
+
+        return all_products
+
+    async def find_products_by_query(self, query: str, category: str | None = None) -> List[Product]:
+        """Поиск товаров по текстовому запросу (реализация ProductCatalog)."""
+        all_products = []
+        seen_ids = set()
+
+        for source in self._sources:
+            try:
+                products = await source.search(query, max_results=5)
+                for p in products:
+                    if p.id not in seen_ids:
+                        all_products.append(p)
+                        seen_ids.add(p.id)
+            except Exception as e:
+                logger.warning("Source %s search error: %s", source.name, e)
+                continue
+
+            if len(all_products) >= 5:
                 break
 
         return all_products

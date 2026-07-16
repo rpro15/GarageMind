@@ -89,7 +89,7 @@ class WildberriesSource(BaseSource):
             except Exception as e:
                 logger.warning("Wildberries parse error: %s", e)
 
-        # 4. Кэшируем (даже пустой — чтобы не долбить заблокированный источник)
+        # 4. Кэшируем (даже пустой)
         _set_cached(key, products)
         return products
 
@@ -109,7 +109,6 @@ class WildberriesSource(BaseSource):
         )
         resp.raise_for_status()
         data = resp.json()
-        # Парсим ответ
         products = []
         for item in data.get("data", {}).get("products", []):
             products.append(Product(
@@ -136,7 +135,6 @@ class WildberriesSource(BaseSource):
             "sort": "popular",
             "page": 1,
         }
-        # Случайный User-Agent
         user_agent = random.choice(_USER_AGENTS)
         headers = {
             "User-Agent": user_agent,
@@ -146,31 +144,45 @@ class WildberriesSource(BaseSource):
         }
 
         try:
-            # Небольшая случайная задержка (0.5-2 сек)
+            # Случайная задержка (0.5-2 сек) для обхода блокировки
             await asyncio.sleep(random.uniform(0.5, 2.0))
 
+            # Попытка 1: основной endpoint
             resp = await self._client.get(
                 "https://search.wb.ru/exactmatch/ru/common/v4/search",
                 params=params,
                 headers=headers,
             )
+
+            # Если 403 -- fallback на альтернативный endpoint
             if resp.status_code == 403:
                 logger.warning("Wildberries blocked (403). Trying alternative endpoint...")
-                # Fallback: другой endpoint
                 resp = await self._client.get(
                     "https://search.wb.ru/common/v5/search",
                     params={**params, "appType": "1", "curr": "rub", "dest": "-1257786"},
                     headers=headers,
                 )
+                if resp.status_code == 403:
+                    logger.warning("Wildberries blocked on both endpoints. Need proxy.")
+                    return []
 
-            if resp.status_code == 403:
-                logger.warning("Wildberries blocked on both endpoints. Need proxy.")
+            # Если 429 -- rate limited, ждём
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", "5"))
+                logger.warning("Wildberries rate limited (429). Waiting %ds...", retry_after)
+                await asyncio.sleep(min(retry_after, 30))
                 return []
 
             resp.raise_for_status()
             data = resp.json()
             return self._parse_products(data)
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                logger.warning("Wildberries 429 caught in exception handler")
+                return []
+            logger.warning("Wildberries HTTP error (%s): %s", type(e).__name__, e)
+            return []
         except Exception as e:
             logger.warning("Wildberries parse error (%s): %s", type(e).__name__, e)
             return []
@@ -190,6 +202,35 @@ class WildberriesSource(BaseSource):
                 rating=float(item.get("rating", 0)),
             ))
         return products
+
+    async def search(self, query: str, max_results: int = 5) -> List[Product]:
+        """Поиск по текстовому запросу (реализация ProductCatalog)."""
+        params = {
+            "query": query,
+            "resultset": "catalog",
+            "sort": "popular",
+            "page": 1,
+        }
+        user_agent = random.choice(_USER_AGENTS)
+        headers = {
+            "User-Agent": user_agent,
+            "Accept": "application/json",
+            "Accept-Language": "ru-RU,ru;q=0.9",
+            "Referer": "https://www.wildberries.ru/",
+        }
+        try:
+            await asyncio.sleep(random.uniform(0.3, 1.0))
+            resp = await self._client.get(
+                "https://search.wb.ru/exactmatch/ru/common/v4/search",
+                params=params,
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return self._parse_products(data)[:max_results]
+        except Exception as e:
+            logger.warning("Wildberries search error: %s", e)
+        return []
 
     async def close(self):
         await self._client.aclose()

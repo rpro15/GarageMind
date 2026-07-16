@@ -9,21 +9,20 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.main import create_app
-from app.config.settings import Settings
 
 
 @pytest.fixture
 def app():
     """Создаём Flask-приложение для тестов"""
-    # Настройки для тестов
     os.environ['SECRET_KEY'] = 'test-secret-key'
-    os.environ['DEEPSEEK_API_KEY'] = 'test-key'
+    os.environ['DEEPSEEK_API_KEY'] = ''  # Пустой = заглушка, без HTTP вызовов
     os.environ['DEEPSEEK_MODEL'] = 'deepseek-chat'
     os.environ['LOG_LEVEL'] = 'CRITICAL'
     os.environ['CACHE_TTL_RECOMMEND'] = '600'
     os.environ['CACHE_TTL_BRANDS'] = '3600'
     os.environ['CACHE_TTL_MODELS'] = '3600'
     os.environ['GARAGE_MIND_DB_PATH'] = ':memory:'
+    os.environ['REDIS_URL'] = ''  # Не используем Redis в тестах
 
     app = create_app()
     app.config['TESTING'] = True
@@ -38,54 +37,35 @@ def client(app):
 
 @pytest.fixture
 def mock_deepseek(monkeypatch):
-    """Мокаем DeepSeek API, чтобы не делать реальные запросы"""
-    
-    class MockDeepSeekResponse:
-        def __init__(self, status_code=200):
-            self.status_code = status_code
-        
-        def json(self):
-            return {
-                'choices': [{
-                    'message': {
-                        'content': 'Рекомендую шины Michelin Pilot Sport 4. '
-                                  'Отличное сцепление на мокрой дороге, '
-                                  'низкий уровень шума. Цена: 12 400 ₽.'
-                    }
-                }]
-            }
-        
-        def raise_for_status(self):
-            pass
+    """
+    Мокаем DeepSeek API на уровне DeepSeekClient.generate_text.
+    Патчим сам метод, а не httpx.AsyncClient.
+    """
+    from app.adapters.deepseek_client import DeepSeekClient
 
-    def mock_post(*args, **kwargs):
-        return MockDeepSeekResponse()
+    async def mock_generate_text(self, prompt="", system_prompt=None, messages=None):
+        return (
+            'Рекомендую шины Michelin Pilot Sport 4. '
+            'Отличное сцепление на мокрой дороге, '
+            'низкий уровень шума. Цена: 12 400 ₽.'
+        )
 
-    monkeypatch.setattr('requests.post', mock_post)
+    async def mock_generate_structured(self, prompt="", schema=None):
+        return {"error": "mock"}
+
+    monkeypatch.setattr(DeepSeekClient, 'generate_text', mock_generate_text)
+    monkeypatch.setattr(DeepSeekClient, 'generate_structured', mock_generate_structured)
 
 
 @pytest.fixture
 def mock_deepseek_embedding(monkeypatch):
-    """Мокаем эмбеддинги DeepSeek (для RAG)"""
-    
-    class MockEmbedResponse:
-        def __init__(self):
-            self.status_code = 200
-        
-        def json(self):
-            return {
-                'data': [{
-                    'embedding': [0.1] * 1024  # 1024-мерный вектор
-                }]
-            }
-        
-        def raise_for_status(self):
-            pass
+    """Мокаем EmbeddingService.get_embedding для RAG."""
+    from app.services.rag.embedding_service import EmbeddingService
 
-    def mock_post(*args, **kwargs):
-        return MockEmbedResponse()
+    async def mock_get_embedding(self, text: str) -> list:
+        return [0.1] * 384  # MiniLM-L6-v2 размер
 
-    monkeypatch.setattr('requests.post', mock_post)
+    monkeypatch.setattr(EmbeddingService, 'get_embedding', mock_get_embedding)
 
 
 @pytest.fixture
@@ -111,3 +91,4 @@ def sample_compare_request():
             {'id': '3', 'name': 'Pirelli Cinturato P7', 'price': 11500, 'rating': 4.4}
         ]
     }
+

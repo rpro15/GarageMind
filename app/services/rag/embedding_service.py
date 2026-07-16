@@ -28,6 +28,10 @@ class EmbeddingService:
         self._available = bool(self.api_key)
         self._client = httpx.AsyncClient(timeout=30.0) if self._available else None
 
+    async def get_embedding(self, text: str) -> List[float]:
+        """Алиас для embed (используется в некоторых тестах)."""
+        return await self.embed(text)
+
     async def embed(self, text: str) -> List[float]:
         """Получить эмбеддинг для одного текста."""
         if not self._available or not self._client:

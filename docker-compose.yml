@@ -3,21 +3,16 @@ services:
     build: .
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - REDIS_URL=redis://redis:6379/0
-      - MINIAPP_URL=https://rpro.su/miniapp/
-      - SECRET_KEY=${SECRET_KEY}
-      - LOG_LEVEL=INFO
       - GARAGE_MIND_DB_PATH=/app/data/garage_mind.db
     depends_on:
       - redis
     volumes:
-      - ./wsgi.py:/app/wsgi.py:ro
-      - ./gunicorn.conf.py:/app/gunicorn.conf.py:ro
-      - ./app:/app/app:ro
       - ./data:/app/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -29,6 +24,9 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -41,3 +39,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - api
+    restart: unless-stopped
+
+volumes:
+  redis_data:

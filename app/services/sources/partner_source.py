@@ -1,10 +1,3 @@
-"""
-Источник партнёрских ссылок через Admitad + реальные данные из базы знаний.
-Стратегия:
-1. Если есть API-ключ Admitad — реальный поиск
-2. Если нет — использует базу знаний SQLite для генерации реалистичных товаров
-3. Всегда возвращает ссылки на Wildberries, Ozon, AliExpress
-"""
 import logging
 import random
 from typing import List, Optional
@@ -16,7 +9,6 @@ from app.services.database.schema import DatabaseService
 
 logger = logging.getLogger(__name__)
 
-# База знаний популярных шин (названия, бренды, категории)
 _TIRE_BRANDS = [
     "Michelin", "Continental", "Bridgestone", "Goodyear", "Pirelli",
     "Nokian Tyres", "Hankook", "Yokohama", "Dunlop", "Toyo Tires",
@@ -53,14 +45,12 @@ _TIRE_SERIES = {
     },
 }
 
-# Диапазоны цен по категориям (₽ за штуку)
 _PRICE_RANGES = {
     "sport": (12000, 25000),
     "comfort": (8000, 16000),
     "economy": (4000, 10000),
 }
 
-# Самые популярные размеры шин
 _COMMON_SIZES = [
     "195/65R15", "205/55R16", "215/60R16", "205/60R16", "215/55R17",
     "225/55R17", "225/45R17", "225/50R17", "235/55R17", "215/45R17",
@@ -71,7 +61,6 @@ _COMMON_SIZES = [
 
 
 def _get_db() -> Optional[DatabaseService]:
-    """Получить DatabaseService (лениво)."""
     try:
         return DatabaseService()
     except Exception:
@@ -79,7 +68,9 @@ def _get_db() -> Optional[DatabaseService]:
 
 
 def _generate_products_from_db(request: TireRequest) -> List[Product]:
-    """Генерирует реалистичные товары из базы знаний."""
+    seed = hash(f"{request.brand}:{request.model}:{request.season}:{request.driving_style}") & 0xFFFFFFFF
+    rng = random.Random(seed)
+
     db = _get_db()
     brand = request.brand
     model = request.model
@@ -89,45 +80,42 @@ def _generate_products_from_db(request: TireRequest) -> List[Product]:
 
     products = []
 
-    # 1. Попробуем найти авто в базе и взять popular_tires
     if db:
         car = db.find_car(brand, model, request.year)
         if car and car.popular_tires:
             popular = [t.strip() for t in car.popular_tires.split(",") if t.strip()]
             tire_sizes = car.tire_sizes_list or _COMMON_SIZES[:3]
-            size = random.choice(tire_sizes)
+            size = rng.choice(tire_sizes)
 
             for i, tire_name in enumerate(popular[:3]):
-                # Честные цены
-                base_price = random.randint(*_PRICE_RANGES.get(style, (8000, 16000)))
+                base_price = rng.randint(*_PRICE_RANGES.get(style, (8000, 16000)))
                 products.append(Product(
                     id=f"db_{brand.lower()}_{i}",
                     name=f"{tire_name} {size}",
-                    price=float(base_price * 4),  # за комплект
+                    price=float(base_price * 4),
                     currency="RUB",
                     partner_link=f"https://www.wildberries.ru/catalog/0/search.aspx?search={brand}+{model}+{tire_name.split()[0]}+{size}",
                     source=f"base_knowledge/{tire_name.split()[0]}",
-                    rating=round(random.uniform(3.8, 5.0), 1),
+                    rating=round(rng.uniform(3.8, 5.0), 1),
                 ))
 
-    # 2. Генерируем из словаря _TIRE_SERIES (дополняем до 5 товаров)
-    series_options = _TIRE_SERIES.get(season, {}).get(style, _TIRE_SERIES["summer"]["comfort"])
-    random.shuffle(series_options)
+    series_options = list(_TIRE_SERIES.get(season, {}).get(style, _TIRE_SERIES["summer"]["comfort"]))
+    rng.shuffle(series_options)
 
     existing_ids = {p.id for p in products}
     for i, series in enumerate(series_options):
         if len(products) >= 5:
             break
-        tire_brand = random.choice(_TIRE_BRANDS)
+        tire_brand = rng.choice(_TIRE_BRANDS)
         tire_name = f"{tire_brand} {series}"
         pid = f"gen_{brand.lower()}_{i}"
 
         if pid in existing_ids:
             continue
 
-        base_price = random.randint(*_PRICE_RANGES.get(style, (8000, 16000)))
-        size = random.choice(_COMMON_SIZES)
-        query = f"{brand}+{model}+{tire_brand}+{series.replace(' ','+')}"
+        base_price = rng.randint(*_PRICE_RANGES.get(style, (8000, 16000)))
+        size = rng.choice(_COMMON_SIZES)
+        query = f"{brand}+{model}+{tire_brand}+{series.replace(' ', '+')}"
 
         products.append(Product(
             id=pid,
@@ -136,11 +124,10 @@ def _generate_products_from_db(request: TireRequest) -> List[Product]:
             currency="RUB",
             partner_link=f"https://www.wildberries.ru/catalog/0/search.aspx?search={query}",
             source=tire_brand.lower(),
-            rating=round(random.uniform(3.5, 5.0), 1),
+            rating=round(rng.uniform(3.5, 5.0), 1),
         ))
         existing_ids.add(pid)
 
-    # 3. Сортируем по цене
     products.sort(key=lambda p: p.price)
     return products[:5]
 
@@ -161,7 +148,6 @@ class PartnerSource(BaseSource):
         self._token: Optional[str] = None
 
     async def _get_token(self) -> Optional[str]:
-        """Получить access_token от Admitad API."""
         if not self.client_id or not self.client_secret:
             return None
         if self._token:
@@ -184,10 +170,7 @@ class PartnerSource(BaseSource):
             logger.warning("Admitad token error: %s", e)
         return None
 
-    async def _search_products(
-        self, query: str, token: str
-    ) -> List[dict]:
-        """Поиск товаров по партнёрским программам."""
+    async def _search_products(self, query: str, token: str) -> List[dict]:
         url = "https://api.admitad.com/search/"
         params = {
             "q": query,
@@ -205,10 +188,8 @@ class PartnerSource(BaseSource):
         return []
 
     async def fetch(self, request: TireRequest) -> List[Product]:
-        """Поиск товаров: Admitad API или генерация из базы знаний."""
         token = await self._get_token()
 
-        # Если есть Admitad API — используем его
         if token:
             query = f"шины {request.brand} {request.model} {request.season.value if request.season else ''}"
             results = await self._search_products(query, token)
@@ -229,8 +210,30 @@ class PartnerSource(BaseSource):
             if products:
                 return products
 
-        # Fallback: генерируем из базы знаний + популярных моделей шин
         return _generate_products_from_db(request)
+
+    async def search(self, query: str, max_results: int = 5) -> List[Product]:
+        """Поиск по текстовому запросу (реализация ProductCatalog)."""
+        token = await self._get_token()
+        if token:
+            try:
+                results = await self._search_products(query, token)
+                products = []
+                for i, item in enumerate(results[:max_results]):
+                    products.append(Product(
+                        id=f"admitad_search_{i}",
+                        name=item.get("name", query),
+                        price=float(item.get("price", 0)),
+                        currency=item.get("currency", "RUB"),
+                        image_url=item.get("image_url"),
+                        partner_link=item.get("url", ""),
+                        source=f"admitad_{item.get('campaign', 'shop')}",
+                        rating=float(item.get("rating", 0)) if item.get("rating") else None,
+                    ))
+                return products
+            except Exception as e:
+                logger.warning("PartnerSource search error: %s", e)
+        return []
 
     async def close(self):
         await self._client.aclose()

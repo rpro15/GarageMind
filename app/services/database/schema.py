@@ -90,11 +90,13 @@ class DatabaseService:
     """
     Единый сервис для работы с SQLite базой знаний.
     Все методы синхронные (SQLite не требует async).
+    Использует WAL-журнал + кэш страниц для производительности.
     """
 
     def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.db_path = ':memory:' if db_path == ':memory:' else db_path
+        if db_path != ':memory:':
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self._init_db()
 
     @contextmanager
@@ -105,11 +107,16 @@ class DatabaseService:
 
     @contextmanager
     def get_conn(self):
-        """Публичный контекстный менеджер подключения к БД."""
+        """Публичный контекстный менеджер подключения к БД с оптимизациями."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA temp_store=MEMORY")
+        conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
+        conn.execute("PRAGMA page_size=4096")
         try:
             yield conn
             conn.commit()

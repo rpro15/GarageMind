@@ -1,8 +1,3 @@
-# ============================================================
-# GarageMind AI — Production Dockerfile
-# Запуск через Gunicorn с несколькими воркерами
-# ============================================================
-
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -34,13 +29,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     addgroup --system app && \
     adduser --system --ingroup app app
 
-# Базовая структура
-RUN mkdir -p /app/data && chown -R app:app /app/data
+# Базовая структура с правами
+RUN mkdir -p /app/data /app/app && chown -R app:app /app/data
 
-# Копируем только необходимые файлы Python
-COPY app/ /app/app/
-COPY --chown=app:app wsgi.py gunicorn.conf.py requirements.txt /app/
+# Копируем всё приложение
+COPY --chown=app:app . /app/
 
+# Удаляем ненужные для продакшна файлы
+RUN rm -rf /app/android_app /app/screenshots /app/docs /app/monitoring /app/tests /app/.git /app/.github /app/README.md.bak /app/FIX_REPORT.md
 ENV PYTHONPATH=/app
 ENV PORT=8000
 
@@ -52,3 +48,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 CMD ["gunicorn", "wsgi:app", "-c", "gunicorn.conf.py"]
+

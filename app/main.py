@@ -7,7 +7,6 @@ from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from limits.storage import MemoryStorage, RedisStorage
 
 from app.api.errors import register_error_handlers
 from app.api.routes import api_blueprint
@@ -15,8 +14,7 @@ from app.config.settings import settings
 from app.services.part_recognition import build_part_recognition_service
 from app.services.vin_decoder import VinDecoderService
 from app.adapters.deepseek_client import DeepSeekClient
-from app.adapters.partner_api import MockPartnerCatalog
-from app.services.tire_recomendation import TireRecommendationService
+from app.services.tire_recommendation import TireRecommendationService
 from app.services.knowledge.auto_collector import AutoCollector
 from app.services.cache import get_cache
 from app.services.user_history import run_migration as run_user_history_migration
@@ -62,24 +60,23 @@ def create_app() -> Flask:
 
     MINIAPP_STATIC = os.path.join(app.root_path, 'miniapp', 'static')
 
-    # Rate Limiting (memory by default, Redis если доступен)
-    limiter_storage = "memory://"
+        # Rate Limiting: Redis если доступен, иначе memory
+    limiter_storage_uri = "memory://"
     try:
-        if settings.REDIS_URL and 'redis' in settings.REDIS_URL:
+        if settings.REDIS_URL and 'redis' in settings.REDIS_URL.lower():
             import redis as redis_lib
             r = redis_lib.from_url(settings.REDIS_URL)
             r.ping()
-            limiter_storage = settings.REDIS_URL
+            r.close()
+            limiter_storage_uri = settings.REDIS_URL
             logger.info("🚦 Rate limiter: Redis storage")
-        else:
-            logger.info("🚦 Rate limiter: memory storage")
     except Exception:
         logger.info("🚦 Rate limiter: memory storage (fallback)")
 
     limiter = Limiter(
         key_func=get_remote_address,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri=limiter_storage,
+        storage_uri=limiter_storage_uri,
     )
     limiter.init_app(app)
 
