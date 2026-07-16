@@ -66,9 +66,8 @@ function resetChat() {
     chatHistory = [];
     messagesEl.innerHTML = '';
     lastRecommendationData = null;
-    // Начинаем заново
-    addMessage("Привет! Я AI-консультант по подбору шин 🚗\nНапишите марку авто (можно на русском), например: Тойота Камри 2020, комфорт, лето");
-    setTimeout(() => askNextQuestion(), 500);
+    enableInput();
+    startChat();
 }
 
 // ===== I18N =====
@@ -481,10 +480,16 @@ const MONTHS_SEASON = {
 // ===== Умный диалог через AI =====
 // AI-чат: отправляем историю и получаем умный ответ
 async function askAI(text) {
+    if (isProcessing) return;
+    isProcessing = true;
+
     chatHistory.push({ role: 'user', content: text });
     addTyping();
 
     try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
         const response = await fetch(`${API_BASE}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -492,13 +497,21 @@ async function askAI(text) {
                 messages: chatHistory,
                 user_data: { ...userData },
                 user_id: tg?.initDataUnsafe?.user?.id?.toString() || 'anonymous'
-            })
+            }),
+            signal: controller.signal
         });
 
+        clearTimeout(timeout);
         removeTyping();
 
         if (!response.ok) {
+            // Если 404 — значит нет AI чата, парсим данные локально
+            if (response.status === 404) {
+                handleLocalParse(text);
+                return;
+            }
             addMessage('Извините, AI временно недоступен. Попробуйте ещё раз.');
+            isProcessing = false;
             return;
         }
 
@@ -506,12 +519,10 @@ async function askAI(text) {
 
         // Обновляем данные, если AI что-то распарсил
         if (data.user_data) {
-            let updated = false;
             for (const [key, val] of Object.entries(data.user_data)) {
                 if (val !== null && val !== undefined && val !== '') {
                     if (userData[key] === null || userData[key] === undefined || userData[key] === '') {
                         userData[key] = val;
-                        updated = true;
                     }
                 }
             }
@@ -523,35 +534,87 @@ async function askAI(text) {
 
         // Если AI считает что данных достаточно — делаем подбор
         if (data.ready) {
-            // Проверяем, все ли поля заполнены
             const allFilled = userData.brand && userData.model && userData.year &&
                 userData.driving_style && userData.season;
             if (allFilled) {
-                addTyping();
-                setTimeout(() => {
-                    removeTyping();
-                    sendRecommendation();
-                }, 600);
+                await new Promise(resolve => setTimeout(resolve, 600));
+                await sendRecommendation();
             }
         }
 
-    } catch (err) {
+        } catch (err) {
         removeTyping();
-        addMessage(`Ошибка соединения: ${err.message}`);
+        if (err.name === 'AbortError') {
+            addMessage('⏱️ Превышено время ожидания. Попробуйте ещё раз.');
+            handleLocalParse(text);
+        } else {
+            addMessage(`⚠️ Ошибка: ${err.message}. Использую локальный парсинг...`);
+            handleLocalParse(text);
+        }
         console.error(err);
+    } finally {
+        isProcessing = false;
+        enableInput();
+    }
+}
+
+// ===== Локальный парсинг (резервный, если AI недоступен) =====
+function handleLocalParse(text) {
+    const parsed = smartParse(text);
+
+    // Обновляем userData из распарсенных данных
+    let updated = false;
+    for (const [key, val] of Object.entries(parsed)) {
+        if (val !== null && val !== undefined && val !== '') {
+            if (!userData[key]) {
+                userData[key] = val;
+                updated = true;
+            }
+        }
+    }
+
+    // Формируем ответ
+    const missing = [];
+    if (!userData.brand) missing.push('марку авто');
+    if (!userData.model && userData.brand) missing.push('модель');
+    if (!userData.year) missing.push('год выпуска');
+    if (!userData.driving_style) missing.push('стиль вождения (комфорт/спорт/эконом)');
+    if (!userData.season) missing.push('сезон (лето/зима/всесезон)');
+
+    if (missing.length > 0) {
+        const brandDisplay = userData.brand ? `\n\n🚗 **Сейчас выбрано**: ${userData.brand} ${userData.model || ''} ${userData.year || ''}`.trim() : '';
+        addMessage(`✅ Принято!${brandDisplay}\n\n📋 Укажите, пожалуйста: ${missing.join(', ')}.`);
+    } else {
+        // Все данные есть — делаем подбор
+        addTyping();
+        setTimeout(() => {
+            removeTyping();
+            addMessage('✅ Все данные собраны! Делаю подбор...');
+            sendRecommendation();
+        }, 500);
     }
 }
 
 function handleUserInput(text) {
-    if (isProcessing) return;
+    if (isProcessing) {
+        addMessage('⏳ Подождите, предыдущий запрос ещё обрабатывается...');
+        return;
+    }
     text = text.trim();
     if (!text) return;
 
     addMessage(text, 'user');
     chatInput.value = '';
+    chatInput.disabled = true;
 
-    // Отправляем AI
+    // Пробуем AI-чат, если упадёт — парсим локально
     askAI(text);
+}
+
+// Разблокировка поля ввода после обработки
+function enableInput() {
+    chatInput.disabled = false;
+    chatInput.focus();
 }
 
 // ===== Переключение режимов =====
@@ -565,29 +628,7 @@ function switchMode(mode) {
         headerSub.innerHTML = '<i class="fas fa-robot"></i> <span>AI-консультант по подбору шин</span>';
         // Если чат пустой — начать диалог
         if (messagesEl.children.length === 0) {
-            // Запускаем AI-диалог
-            setTimeout(() => {
-                addTyping();
-                // Отправляем пустое приветствие AI
-                fetch(`${API_BASE}/api/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        messages: [{ role: 'user', content: 'Привет! Нужна помощь с выбором шин.' }],
-                        user_data: { ...userData },
-                        user_id: tg?.initDataUnsafe?.user?.id?.toString() || 'anonymous'
-                    })
-                }).then(r => r.json()).then(data => {
-                    removeTyping();
-                    if (data.reply) {
-                        chatHistory.push({ role: 'assistant', content: data.reply });
-                        addMessage(data.reply);
-                    }
-                }).catch(() => {
-                    removeTyping();
-                    addMessage("Привет! Я AI-консультант по подбору шин 🚗\nНапишите марку авто (можно на русском), например: Тойота Камри 2020, комфорт, лето");
-                });
-            }, 500);
+            startChat();
         }
     } else {
         chatMode.classList.add('hidden');
@@ -598,6 +639,44 @@ function switchMode(mode) {
         loadFormBrands();
     }
     document.getElementById('app').classList.remove('step-0', 'step-1', 'step-2', 'step-3', 'step-4', 'step-5');
+}
+
+// ===== Старт чата с приветствием =====
+async function startChat() {
+    addTyping();
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const resp = await fetch(`${API_BASE}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'Привет! Нужна помощь с выбором шин.' }],
+                user_data: { ...userData },
+                user_id: 'new_user'
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+        removeTyping();
+
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.reply) {
+                chatHistory.push({ role: 'assistant', content: data.reply });
+                addMessage(data.reply);
+                return;
+            }
+        }
+    } catch(e) {
+        // fallback
+    }
+
+    removeTyping();
+    // Приветствие в любом случае (даже если AI недоступен)
+    addMessage("Привет! Я AI-консультант по подбору шин 🚗\n\nНапишите марку авто (можно на русском), например:\n«Тойота Камри 2020, комфорт, лето»\n\nЯ помогу подобрать лучшие шины! 😊");
 }
 
 modeToggle.addEventListener('click', () => {
@@ -616,8 +695,9 @@ function addMessage(text, type = 'bot') {
     bubble.textContent = text;
     div.appendChild(avatar);
     div.appendChild(bubble);
-    messagesEl.appendChild(div);
+        messagesEl.appendChild(div);
     scrollChat();
+    checkShowResetButton();
     return div;
 }
 
@@ -647,13 +727,15 @@ function scrollChat() {
     chat.scrollTop = chat.scrollHeight;
 }
 
-function setStepClass(step) {
-    // Устаревшая функция — больше не используется
-}
-
-// ===== Чат: вопросы (устаревшая заглушка) =====
-function askQuestion(step) {
-    // больше не используется
+// Показываем кнопку "Начать заново" после 4+ сообщений
+function checkShowResetButton() {
+    const msgCount = messagesEl.querySelectorAll('.msg').length;
+    const existingBtn = document.getElementById('resetChatBtn');
+    if (msgCount >= 4 && !existingBtn) {
+        addResetButton();
+    } else if (msgCount < 4 && existingBtn) {
+        existingBtn.remove();
+    }
 }
 
 // ===== Общий запрос к API =====
@@ -671,24 +753,42 @@ async function sendRecommendation(payloadOverride) {
         user_id: tg?.initDataUnsafe?.user?.id?.toString() || 'anonymous'
     };
 
-    if (currentMode === 'chat') {
-        addMessage("Спасибо! Анализирую ваш авто... 🤖");
-        addTyping();
+    // Проверка обязательных полей
+    if (!payload.brand || !payload.model || !payload.year || !payload.driving_style) {
+        addMessage('⚠️ Не хватает данных. Укажите марку, модель, год и стиль вождения.');
+        isProcessing = false;
+        return;
     }
+
+    if (currentMode === 'chat') {
+        addMessage("🔍 Анализирую ваш авто, подбираю лучшие шины...");
+    }
+    addTyping();
     loadingResults.classList.remove('hidden');
 
     try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 45000);
+
         const response = await fetch(`${API_BASE}/api/recommend_tires`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
 
-        if (currentMode === 'chat') removeTyping();
+        clearTimeout(timeout);
+        removeTyping();
 
         if (!response.ok) {
-            const err = await response.json();
-            if (currentMode === 'chat') addMessage(`Ошибка: ${err.error || 'Что-то пошло не так'}`);
+            loadingResults.classList.add('hidden');
+            let errMsg = 'Что-то пошло не так';
+            try {
+                const err = await response.json();
+                errMsg = err.error || err.message || errMsg;
+                if (typeof errMsg === 'object') errMsg = errMsg.message || JSON.stringify(errMsg);
+            } catch(e) {}
+            if (currentMode === 'chat') addMessage(`❌ Ошибка: ${errMsg}`);
             isProcessing = false;
             return;
         }
@@ -698,19 +798,20 @@ async function sendRecommendation(payloadOverride) {
         showResults(data);
 
         if (currentMode === 'chat') {
-            addMessage("Готово! Смотрите рекомендации ниже 👇");
-            // После показа результатов сбрасываем данные пользователя для нового диалога
-            resetUserData();
+            addMessage("✅ Готово! Смотрите рекомендации ниже 👇");
+            // Не сбрасываем userData, чтобы пользователь мог продолжить
         }
 
         if (tg) {
-            tg.sendData(JSON.stringify({ action: 'recommendation', ...data }));
+            try { tg.sendData(JSON.stringify({ action: 'recommendation', ...data })); } catch(e) {}
         }
 
     } catch (err) {
-        if (currentMode === 'chat') removeTyping();
+        removeTyping();
         loadingResults.classList.add('hidden');
-        if (currentMode === 'chat') addMessage(`Ошибка соединения: ${err.message}`);
+        let errMsg = err.message;
+        if (err.name === 'AbortError') errMsg = 'Превышено время ожидания';
+        if (currentMode === 'chat') addMessage(`⚠️ ${errMsg}. Попробуйте ещё раз позже.`);
         console.error(err);
     } finally {
         isProcessing = false;
@@ -1010,6 +1111,22 @@ closeResultsBtn.addEventListener('click', () => resultsOverlay.classList.add('hi
 resultsOverlay.addEventListener('click', (e) => {
     if (e.target === resultsOverlay) resultsOverlay.classList.add('hidden');
 });
+
+// ===== Кнопка "Новый поиск" в чате =====
+function addResetButton() {
+    const existingBtn = document.getElementById('resetChatBtn');
+    if (existingBtn) return;
+    
+    const btn = document.createElement('button');
+    btn.id = 'resetChatBtn';
+    btn.className = 'reset-chat-btn';
+    btn.innerHTML = '<i class="fas fa-redo"></i> Начать заново';
+    btn.addEventListener('click', () => {
+        resetChat();
+        btn.remove();
+    });
+    messagesEl.appendChild(btn);
+}
 
 // ===== Старт =====
 function init() {

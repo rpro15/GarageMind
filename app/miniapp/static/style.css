@@ -79,6 +79,36 @@ body::before {
         inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
+/* ===== Кнопка сброса чата ===== */
+.reset-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin: 16px auto 8px;
+    padding: 10px 20px;
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.reset-chat-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0, 212, 255, 0.04);
+    border-style: solid;
+}
+
+.reset-chat-btn i {
+    font-size: 12px;
+}
+
 #app::before {
     content: '';
     position: absolute;
